@@ -1,0 +1,10 @@
+data
+model
+venv
+.idea
+py*tf*
+*.pyc
+.vscode
+timit
+librispeech
+notebooks
