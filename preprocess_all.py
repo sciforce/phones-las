@@ -64,7 +64,7 @@ def read_audio_and_text(inputs):
 
 def calculate_acoustic_features(args, waveform):
     # n_fft = 2**(np.floor(np.log2(args.window*SAMPLE_RATE/1000)))
-    n_fft = args.window*SAMPLE_RATE/1000
+    n_fft = int(args.window*SAMPLE_RATE/1000.0)
     if 'mfe' == args.feature_type:
         spec, energy = mfe(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
             frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft)
@@ -73,6 +73,8 @@ def calculate_acoustic_features(args, waveform):
         acoustic_features = mfcc(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
             frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft,
             num_cepstral = args.n_mfcc)
+    else:
+        raise ValueError('Unexpected features type.')
     if args.deltas:
         orig_shape = acoustic_features.shape
         acoustic_features = extract_derivative_feature(acoustic_features)
