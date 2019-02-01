@@ -1,5 +1,6 @@
 import argparse
 import tensorflow as tf
+import os
 
 import utils
 
@@ -54,33 +55,31 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 
 
 def main(args):
+    eval_name = str(os.path.basename(args.data).split('.')[0])
     config = tf.estimator.RunConfig(model_dir=args.model_dir)
     hparams = utils.create_hparams(args)
 
     vocab_list = utils.load_vocab(args.vocab)
     binf2phone_np = None
     binf2phone = None
-    if not hparams.decoder.binary_outputs:
-        vocab_size = len(vocab_list)
-    else:
+    if hparams.decoder.binary_outputs:
         binf2phone = utils.load_binf2phone(args.binf_map, vocab_list)
-        vocab_size = len(binf2phone.index)
-        vocab_list = binf2phone.columns
         binf2phone_np = binf2phone.values
 
     def model_fn(features, labels,
         mode, config, params):
         return las_model_fn(features, labels, mode, config, params,
-            binf2phone=binf2phone_np)
+                            binf2phone=binf2phone_np, run_name=eval_name)
 
     model = tf.estimator.Estimator(
         model_fn=model_fn,
         config=config,
         params=hparams)
 
+    tf.logging.info('Evaluating on {}'.format(eval_name))
     model.evaluate(lambda: input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels,
-            batch_size=args.batch_size, binf2phone=binf2phone))
+            batch_size=args.batch_size, binf2phone=binf2phone), name=eval_name)
 
 
 if __name__ == '__main__':

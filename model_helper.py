@@ -142,7 +142,8 @@ def las_model_fn(features,
                  mode,
                  config,
                  params,
-                 binf2phone=None):
+                 binf2phone=None,
+                 run_name=None):
     if tf.estimator.ModeKeys.PREDICT == mode:
         params.use_text = False
 
@@ -268,12 +269,16 @@ def las_model_fn(features,
             metrics = {
                 'edit_distance': tf.metrics.mean(edit_distance),
             }
-
-        tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
+        if params.use_text and not params.emb_loss:
+            pass
+        else:
+            tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
+    else:
+        edit_distance = None
 
     with tf.name_scope('cross_entropy'):
         loss_fn = compute_loss_sigmoid if is_binf_outputs else compute_loss
-        loss = loss_fn(
+        audio_loss = loss_fn(
             logits, targets_transformed, final_sequence_length, target_sequence_length, mode)
 
     emb_loss = 0
@@ -286,15 +291,22 @@ def las_model_fn(features,
             attention_images = utils.create_attention_images(
                 final_context_state)
 
-        attention_summary = tf.summary.image(
-            'attention_images', attention_images)
-
-        eval_summary_hook = tf.train.SummarySaverHook(
-            save_steps=10,
-            output_dir=os.path.join(config.model_dir, 'eval'),
-            summary_op=attention_summary)
-
-        hooks = [eval_summary_hook]
+        if params.use_text and not params.emb_loss:
+            hooks = []
+            loss = text_loss
+        else:
+            run_name = run_name or 'eval'
+            if run_name != 'eval':
+                # For other summaries eval is automatically added.
+                run_name = 'eval_{}'.format(run_name)
+            attention_summary = tf.summary.image(
+                'attention_images', attention_images)
+            eval_summary_hook = tf.train.SummarySaverHook(
+                save_steps=20,
+                output_dir=os.path.join(config.model_dir, run_name),
+                summary_op=attention_summary)
+            hooks = [eval_summary_hook]
+            loss = audio_loss
         if not is_binf_outputs:
             log_data = {
                 'edit_distance': tf.reduce_mean(edit_distance),
@@ -307,7 +319,7 @@ def las_model_fn(features,
                 else:
                     log_data['emb_loss'] = tf.reduce_mean(emb_loss)
                 log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
-            logging_hook = tf.train.LoggingTensorHook(log_data, every_n_iter=10)
+            logging_hook = tf.train.LoggingTensorHook(log_data, every_n_iter=20)
             hooks += [logging_hook]
 
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics,
@@ -326,7 +338,7 @@ def las_model_fn(features,
             total_params = np.sum([np.prod(x.shape.as_list()) for x in text_var_list])
             tf.logging.info('Trainable text parameters: {}'.format(total_params))
             audio_train_op = optimizer.minimize(
-                loss, global_step=tf.train.get_global_step(), var_list=audio_var_list)
+                audio_loss, global_step=tf.train.get_global_step(), var_list=audio_var_list)
             text_train_op = optimizer.minimize(
                 text_loss, global_step=tf.train.get_global_step(), var_list=text_var_list)
             emb_train_op = optimizer.minimize(
@@ -343,16 +355,20 @@ def las_model_fn(features,
             total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
             tf.logging.info('Trainable parameters: {}'.format(total_params))
             train_op = optimizer.minimize(
-                loss, global_step=tf.train.get_global_step(), var_list=var_list)
+                audio_loss, global_step=tf.train.get_global_step(), var_list=var_list)
 
+    loss = text_loss if params.use_text and not params.emb_loss else audio_loss
     train_log_data = {
         'loss': loss
     }
-    if not is_binf_outputs and params.use_text:
-        if params.emb_loss:
+    if not is_binf_outputs:
+        if params.use_text:
+            if params.emb_loss:
+                train_log_data['edit_distance'] = tf.reduce_mean(edit_distance)
+                train_log_data['emb_loss'] = tf.reduce_mean(emb_loss)
+            train_log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
+        else:
             train_log_data['edit_distance'] = tf.reduce_mean(edit_distance)
-            train_log_data['emb_loss'] = tf.reduce_mean(emb_loss)
-        train_log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
     logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
 
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
