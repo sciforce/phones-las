@@ -6,8 +6,9 @@ from tqdm import tqdm
 from multiprocessing import Lock
 from joblib import Parallel, delayed, dump
 from argparse import ArgumentParser
+from speechpy.feature import mfe, mfcc, extract_derivative_feature
 
-from utils import calculate_mfcc_op, get_ipa, ipa2binf, load_binf2phone
+from utils import get_ipa, ipa2binf, load_binf2phone
 
 
 SAMPLE_RATE = 16000
@@ -20,8 +21,6 @@ par_handle = None
 session = tf.Session()
 tfrecord_mutex = Lock()
 stats_mutex = Lock()
-waveform_place = tf.placeholder(tf.float32, [None, None])
-mfcc_op = None
 binf2phone = None
 
 
@@ -63,6 +62,24 @@ def read_audio_and_text(inputs):
     }
 
 
+def calculate_acoustic_features(args, waveform):
+    # n_fft = 2**(np.floor(np.log2(args.window*SAMPLE_RATE/1000)))
+    n_fft = args.window*SAMPLE_RATE/1000
+    if 'mfe' == args.feature_type:
+        spec, energy = mfe(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
+            frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft)
+        acoustic_features = np.hstack((spec, energy[:, np.newaxis]))
+    elif 'mfcc' == args.feature_type:
+        acoustic_features = mfcc(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
+            frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft,
+            num_cepstral = args.n_mfcc)
+    if args.deltas:
+        orig_shape = acoustic_features.shape
+        acoustic_features = extract_derivative_feature(acoustic_features)
+        acoustic_features = np.reshape(acoustic_features, (-1, orig_shape[-1] * 3))
+    return acoustic_features
+
+
 def build_features_and_vocabulary_fn(args, inputs):
     global means, stds, total
     waveform = inputs['waveform']
@@ -75,19 +92,19 @@ def build_features_and_vocabulary_fn(args, inputs):
             text = get_ipa(text, language)
         if args.targets == 'binary_features':
             binf = ipa2binf(text, binf2phone, 'ipa'==language)
-    mfcc = session.run(mfcc_op, {waveform_place: waveform[np.newaxis, :]})[0, :, :]
     vocabulary.update(text)
+    acoustic_features = calculate_acoustic_features(args, waveform)
     if args.norm_file:
         with stats_mutex:
             if means is None:
-                means = np.mean(mfcc, axis=0)
-                stds = np.std(mfcc, axis=0)
+                means = np.mean(acoustic_features, axis=0)
+                stds = np.std(acoustic_features, axis=0)
             else:
-                means += np.mean(mfcc, axis=0)
-                stds += np.std(mfcc, axis=0)
+                means += np.mean(acoustic_features, axis=0)
+                stds += np.std(acoustic_features, axis=0)
             total += 1
     return {
-        'mfcc': mfcc,
+        'mfcc': acoustic_features,
         'text': binf if args.targets == 'binary_features' else text
     }
 
@@ -117,10 +134,13 @@ if __name__ == "__main__":
     parser.add_argument('--norm_file', help='File name for normalization data.', default=None)
     parser.add_argument('--vocab_file', help='Vocabulary file name.', default=None)
     parser.add_argument('--top_k', help='Max size of vocabulary.', type=int, default=1000)
+    parser.add_argument('--feature_type', help='Acoustic feature type.', type=str,
+                        choices=['mfe', 'mfcc'], default='mfcc')
     parser.add_argument('--n_mfcc', help='Number of MFCC coeffs.', type=int, default=13)
     parser.add_argument('--n_mels', help='Number of mel-filters.', type=int, default=40)
     parser.add_argument('--window', help='Analysis window length in ms.', type=int, default=20)
     parser.add_argument('--step', help='Analysis window step in ms.', type=int, default=10)
+    parser.add_argument('--deltas', help='Calculate deltas and double-deltas.', action='store_true')
     parser.add_argument('--n_jobs', help='Number of parallel jobs.', type=int, default=4)
     parser.add_argument('--targets', help='Determines targets type.', type=str,
                         choices=['words', 'phones', 'binary_features'], default='words')
@@ -132,7 +152,6 @@ if __name__ == "__main__":
     print('Processing audio dataset from file {}.'.format(args.input_file))
     window = int(SAMPLE_RATE * args.window / 1000.0)
     step = int(SAMPLE_RATE * args.step / 1000.0)
-    mfcc_op = calculate_mfcc_op(SAMPLE_RATE, args.n_mfcc, window, step, args.n_mels)(waveform_place)
     lines = open(args.input_file, 'r').readlines()
     par_handle = tqdm(unit='sound')
     with tf.io.TFRecordWriter(args.output_file) as writer:
