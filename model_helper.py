@@ -12,6 +12,9 @@ __all__ = [
 ]
 
 
+GRAD_NORM = 2
+
+
 def compute_loss(logits, targets, final_sequence_length, target_sequence_length, mode):
 
     assert mode != tf.estimator.ModeKeys.PREDICT
@@ -239,7 +242,10 @@ def las_model_fn(features,
         try:
             predictions['alignment'] = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])
         except AttributeError:
-            alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
+            if not isinstance(final_context_state.cell_state, tuple):
+                alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
+            else:
+                alignment_history = tf.transpose(final_context_state.cell_state[-1].alignment_history, perm=[1, 0, 2])
             shape = tf.shape(alignment_history)
             predictions['alignment'] = tf.reshape(alignment_history,
                 [-1, params.decoder.beam_width, shape[1], shape[2]])
@@ -337,12 +343,15 @@ def las_model_fn(features,
                              if not x.name.startswith('listener') and not x.name.startswith('speller')]
             total_params = np.sum([np.prod(x.shape.as_list()) for x in text_var_list])
             tf.logging.info('Trainable text parameters: {}'.format(total_params))
-            audio_train_op = optimizer.minimize(
-                audio_loss, global_step=tf.train.get_global_step(), var_list=audio_var_list)
-            text_train_op = optimizer.minimize(
-                text_loss, global_step=tf.train.get_global_step(), var_list=text_var_list)
-            emb_train_op = optimizer.minimize(
-                emb_loss, global_step=tf.train.get_global_step(), var_list=audio_var_list)
+            gvs = optimizer.compute_gradients(audio_loss, var_list=audio_var_list)
+            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+            audio_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
+            gvs = optimizer.compute_gradients(text_loss, var_list=text_var_list)
+            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+            text_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
+            gvs = optimizer.compute_gradients(emb_loss, var_list=audio_var_list)
+            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+            emb_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
             if not params.text_loss:
                 tf.logging.info('Removing reader and writer from optimization.')
                 train_op = tf.group(audio_train_op, emb_train_op)
@@ -354,8 +363,9 @@ def las_model_fn(features,
         else:
             total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
             tf.logging.info('Trainable parameters: {}'.format(total_params))
-            train_op = optimizer.minimize(
-                audio_loss, global_step=tf.train.get_global_step(), var_list=var_list)
+            gvs = optimizer.compute_gradients(audio_loss, var_list=var_list)
+            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+            train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
 
     loss = text_loss if params.use_text and not params.emb_loss else audio_loss
     train_log_data = {
