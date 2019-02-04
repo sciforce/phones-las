@@ -239,7 +239,10 @@ def las_model_fn(features,
         try:
             predictions['alignment'] = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])
         except AttributeError:
-            alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
+            if not isinstance(final_context_state.cell_state, tuple):
+                alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
+            else:
+                alignment_history = tf.transpose(final_context_state.cell_state[-1].alignment_history, perm=[1, 0, 2])
             shape = tf.shape(alignment_history)
             predictions['alignment'] = tf.reshape(alignment_history,
                 [-1, params.decoder.beam_width, shape[1], shape[2]])
