@@ -63,12 +63,13 @@ def read_audio_and_text(inputs):
 
 
 def calculate_acoustic_features(args, waveform):
-    # n_fft = 2**(np.floor(np.log2(args.window*SAMPLE_RATE/1000)))
     n_fft = int(args.window*SAMPLE_RATE/1000.0)
     if 'mfe' == args.feature_type:
+        log_cut = 1e-8
         spec, energy = mfe(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
             frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft)
         acoustic_features = np.hstack((spec, energy[:, np.newaxis]))
+        acoustic_features = np.log(log_cut + acoustic_features)
     elif 'mfcc' == args.feature_type:
         acoustic_features = mfcc(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
             frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft,
@@ -157,7 +158,11 @@ if __name__ == "__main__":
     lines = open(args.input_file, 'r').readlines()
     par_handle = tqdm(unit='sound')
     with tf.io.TFRecordWriter(args.output_file) as writer:
-        Parallel(n_jobs=args.n_jobs, prefer="threads")(delayed(process_line)(args, writer, x) for x in lines)
+        if args.n_jobs > 1:
+            Parallel(n_jobs=args.n_jobs, prefer="threads")(delayed(process_line)(args, writer, x) for x in lines)
+        else:
+            for x in lines:
+                process_line(args, writer, x)
     session.close()
     par_handle.close()
     if args.norm_file is not None:
