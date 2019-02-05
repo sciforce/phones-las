@@ -66,6 +66,7 @@ def parse_args():
                         help='dropout rate of rnn cell')
     parser.add_argument('--l2_reg_scale', type=float, default=1e-6,
                         help='L2 regularization scale')
+    parser.add_argument('--add_noise', action='store_true', help='Add Gaussian noise to weights')
     parser.add_argument('--use_text', action='store_true', help='use textual information for encoder regularization')
     parser.add_argument('--emb_loss', action='store_true',
                         help='audio encoder regularization using text encoder')
