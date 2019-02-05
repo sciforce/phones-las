@@ -2,9 +2,11 @@ import argparse
 import os
 import tensorflow as tf
 from joblib import dump
+import numpy as np
+from tqdm import tqdm
+from editdistance import eval as edist
 
 import utils
-
 from model_helper import las_model_fn
 
 
@@ -16,6 +18,7 @@ def parse_args():
 
     parser.add_argument('--data', type=str, required=True,
                         help='inference data in TFRecord format')
+    parser.add_argument('--plain_targets', type=str, help='Path to CSV file with targets.')
     parser.add_argument('--vocab', type=str, required=True,
                         help='vocabulary table, listing vocabulary line by line')
     parser.add_argument('--norm', type=str, default=None,
@@ -56,7 +59,7 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 
     dataset = utils.process_dataset(
         dataset, vocab_table, sos, eos, means, stds, batch_size, 1,
-        binary_targets=binary_targets, labels_shape=labels_shape)
+        binary_targets=binary_targets, labels_shape=labels_shape, is_infer=True)
 
     if args.take > 0:
         dataset = dataset.take(take)
@@ -101,6 +104,28 @@ def main(args):
             take=args.take, binf2phone=binf2phone),
         predict_keys=['sample_ids', 'embedding'])
 
+    predictions = list(predictions)
+    if args.plain_targets:
+        targets = []
+        for line in open(args.plain_targets, 'r'):
+            _, _, phrase = line.split(',')
+            phrase = phrase.split()
+            phrase = [x.strip().lower() for x in phrase]
+            targets.append(phrase)
+        err = 0
+        tot = 0
+        for p, t in tqdm(zip(predictions, targets)):
+            for bi, i in enumerate(p['sample_ids'].T):
+                if bi > 0:
+                    break
+                i = i.tolist() + [utils.EOS_ID]
+                i = i[:i.index(utils.EOS_ID)]
+                text = to_text(vocab_list, i)
+                text = text.split(args.delimiter)
+            err += edist(text, t)
+            tot += len(t)
+        print(f'PER: {100 * err / tot:2.2f}%')
+
     if args.beam_width > 0:
         predictions = [{
             'transcription': to_text(vocab_list, y['sample_ids'][:, 0]),
@@ -111,11 +136,11 @@ def main(args):
             'transcription': to_text(vocab_list, y['sample_ids']),
             'embedding': y['embedding']
         } for y in predictions]
-
+    
     save_to = os.path.join(args.model_dir, 'infer.txt')
     with open(save_to, 'w') as f:
         f.write('\n'.join(p['transcription'] for p in predictions))
-
+    
     save_to = os.path.join(args.model_dir, 'infer.dmp')
     dump(predictions, save_to)
 
