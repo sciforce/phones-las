@@ -17,3 +17,4 @@ librosa==0.6.2
 py-espeak-ng==0.1.6
 pandas==0.23.4
 speechpy==2.4
+editdistance==0.5.2
