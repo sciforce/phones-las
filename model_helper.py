@@ -278,7 +278,13 @@ def las_model_fn(features,
         if params.use_text and not params.emb_loss:
             pass
         else:
-            tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
+            # In TRAIN model this becomes an significantly affected by early high values.
+            # As a result in summaries train values would be high and drop after restart.
+            # To prevent this, we use last batch average in case of TRAIN.
+            if mode != tf.estimator.ModeKeys.TRAIN:
+                tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
+            else:
+                tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance))
     else:
         edit_distance = None
 
