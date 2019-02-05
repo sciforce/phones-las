@@ -363,6 +363,12 @@ def las_model_fn(features,
         else:
             total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
             tf.logging.info('Trainable parameters: {}'.format(total_params))
+
+            trainable_vars = tf.trainable_variables()
+            regularizer = tf_contrib.layers.l2_regularizer(params.l2_reg_scale)
+            reg_term = tf.contrib.layers.apply_regularization(regularizer, trainable_vars)
+            audio_loss = audio_loss + reg_term
+
             gvs = optimizer.compute_gradients(audio_loss, var_list=var_list)
             capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
             train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
