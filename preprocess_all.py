@@ -64,21 +64,38 @@ def read_audio_and_text(inputs):
 
 def calculate_acoustic_features(args, waveform):
     n_fft = int(args.window*SAMPLE_RATE/1000.0)
+    hop_length = int(args.step * SAMPLE_RATE / 1000.0)
     if 'mfe' == args.feature_type:
         log_cut = 1e-8
-        spec, energy = mfe(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
-            frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft)
-        acoustic_features = np.hstack((spec, energy[:, np.newaxis]))
+        if args.backend=='speechpy':
+            spec, energy = mfe(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
+                frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft)
+            acoustic_features = np.hstack((spec, energy[:, np.newaxis]))
+        else:
+            spec = librosa.feature.melspectrogram(y=waveform, sr=SAMPLE_RATE, n_fft=n_fft, 
+                hop_length=hop_length, n_mels=args.n_mels).transpose()
+            energy = librosa.feature.rmse(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
+            acoustic_features = np.hstack((spec, energy))
         acoustic_features = np.log(log_cut + acoustic_features)
     elif 'mfcc' == args.feature_type:
-        acoustic_features = mfcc(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
-            frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft,
-            num_cepstral = args.n_mfcc)
+        if args.backend=='speechpy':
+            acoustic_features = mfcc(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
+                frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft,
+                num_cepstral = args.n_mfcc)
+        else:
+            acoustic_features = librosa.feature.mfcc(y=waveform, sr=SAMPLE_RATE, n_mfcc=args.n_mfcc,
+                n_fft=n_fft, hop_length=hop_length, n_mels=args.n_mels).transpose()
     else:
         raise ValueError('Unexpected features type.')
     if args.deltas:
         orig_shape = acoustic_features.shape
-        acoustic_features = extract_derivative_feature(acoustic_features)
+        if args.backend=='speechpy':
+            acoustic_features = extract_derivative_feature(acoustic_features)
+        else:
+            delta = librosa.feature.delta(acoustic_features)
+            ddelta = librosa.feature.delta(acoustic_features, order=2)
+            acoustic_features = np.stack((acoustic_features[:, :, np.newaxis],
+                delta[:, :, np.newaxis], ddelta[:, :, np.newaxis]), axis=-1)
         acoustic_features = np.reshape(acoustic_features, (-1, orig_shape[-1] * 3))
     return acoustic_features
 
@@ -139,6 +156,8 @@ if __name__ == "__main__":
     parser.add_argument('--top_k', help='Max size of vocabulary.', type=int, default=1000)
     parser.add_argument('--feature_type', help='Acoustic feature type.', type=str,
                         choices=['mfe', 'mfcc'], default='mfcc')
+    parser.add_argument('--backend', help='Library for calculating acoustic features.', type=str,
+                        choices=['speechpy', 'librosa'], default='librosa')
     parser.add_argument('--n_mfcc', help='Number of MFCC coeffs.', type=int, default=13)
     parser.add_argument('--n_mels', help='Number of mel-filters.', type=int, default=40)
     parser.add_argument('--window', help='Analysis window length in ms.', type=int, default=20)
