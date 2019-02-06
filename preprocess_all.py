@@ -92,8 +92,8 @@ def calculate_acoustic_features(args, waveform):
         if args.backend=='speechpy':
             acoustic_features = extract_derivative_feature(acoustic_features)
         else:
-            delta = librosa.feature.delta(acoustic_features)
-            ddelta = librosa.feature.delta(acoustic_features, order=2)
+            delta = librosa.feature.delta(acoustic_features, axis=0)
+            ddelta = librosa.feature.delta(acoustic_features, order=2, axis=0)
             acoustic_features = np.stack((acoustic_features[:, :, np.newaxis],
                 delta[:, :, np.newaxis], ddelta[:, :, np.newaxis]), axis=-1)
         acoustic_features = np.reshape(acoustic_features, (-1, orig_shape[-1] * 3))
