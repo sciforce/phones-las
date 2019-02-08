@@ -51,7 +51,8 @@ class LyonCalc:
         """
         n_samples = int(signal.size)
         n_channels = int(coeffs.shape[1])
-        state = state or np.zeros((2, n_channels), dtype=np.double)
+        if state is None:
+            state = np.zeros((2, n_channels), dtype=np.double)
         out = np.zeros((n_samples, n_channels), dtype=np.double)
         res = self._lyon_lib.soscascade(
             signal, n_samples, coeffs, state, n_channels, out)
@@ -69,7 +70,8 @@ class LyonCalc:
         """
         n_samples, n_channels = int(input_data.shape[0]), int(input_data.shape[1])
         n_stages = int(agc_params.shape[0])
-        state = state or np.zeros((n_stages, n_channels), dtype=np.double)
+        if state is None:
+            state = np.zeros((n_stages, n_channels), dtype=np.double)
         out = np.zeros((n_samples, n_channels), dtype=np.double)
         res = self._lyon_lib.agc(
             input_data, n_channels, n_samples, n_stages, agc_params, state, out)
@@ -88,7 +90,8 @@ class LyonCalc:
         n_samples, n_input_channels = int(input_data.shape[0]), int(input_data.shape[1])
         n_filter_channels = int(coeffs.shape[1])
         n_output_channels = max(n_filter_channels, n_input_channels)
-        state = state or np.zeros((2, n_output_channels), dtype=np.double)
+        if state is None:
+            state = np.zeros((2, n_output_channels), dtype=np.double)
         out = np.zeros((n_samples, n_output_channels), dtype=np.double)
         res = self._lyon_lib.sosfilters(
             input_data, n_input_channels, n_samples, coeffs, n_filter_channels,
@@ -112,12 +115,13 @@ class LyonCalc:
         @parameter differ Channel difference: improves model's freq response. Default: True
         @parameter agc Whether to use AGC for neural model adaptation. Default: True
         @parameter tau_factor Reduces antialiasing in filter decimation. Default: 3
+        @returns ndarray of shape [N / decimation_factor, channels]
         """
         step_factor = step_factor or (ear_q / 32)
         ear_filters, _ = design_lyon_filters(sample_rate, ear_q, step_factor)
         n_samples = signal.size
 
-        nOutputSamples = np.floor(n_samples / decimation_factor)
+        nOutputSamples = int(np.floor(n_samples / decimation_factor))
         nChannels = int(ear_filters.shape[1])
 
         sosOutput = np.zeros((decimation_factor, nChannels), dtype=np.double)
@@ -143,10 +147,10 @@ class LyonCalc:
                 agc_params = np.array(list(zip(tars, epses)), dtype=np.double)
                 output, agcState = self.agc(output, agc_params, agcState)
             if differ:
-                output = np.vstack([output[:, 0], output[:, :-1] - output[:, 1:]])
+                output = np.concatenate([output[:, 0:1], output[:, :-1] - output[:, 1:]], axis=1)
                 output = np.clip(output, 0, None)
             if decimation_factor > 1:
-                output, decState = self.sosfilters(output, decFilt, decState)
-            y[:, i] = output[decimation_factor, :]
+                output, decState = self.sosfilters(output, decFilt[:, np.newaxis], decState)
+            y[i, :] = output[-1, :]
 
         return y[:, 2:]

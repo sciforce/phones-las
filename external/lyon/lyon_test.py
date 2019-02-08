@@ -1,5 +1,5 @@
 import numpy as np
-from lyon import LyonCalc
+from lyon.calc import LyonCalc
 
 
 calc = LyonCalc()
