@@ -95,3 +95,7 @@ class LyonCalc:
         if res != 0:
             raise ValueError('Failed to apply sosfilters!')
         return out, state
+
+    def lyon_passive_ear(self, signal, sample_rate=16000, decimation_factor=1,
+                         ear_q=8, step_factor=None, differ=1, agc_f=1, tau_factor=3):
+        step_factor = step_factor or (ear_q / 32)
