@@ -14,7 +14,8 @@ __all__ = [
 
 GRAD_NORM = 2
 NOISE_MEAN = 0.0
-NOISE_STD = 1e-2
+NOISE_STD = 0.5
+ADD_NOISE_STEP = 2000
 
 
 def compute_loss(logits, targets, final_sequence_length, target_sequence_length, mode):
@@ -141,11 +142,6 @@ def compute_emb_loss(encoder_state, reader_encoder_state):
             emb_loss += tf.losses.mean_squared_error(enc_s.h, enc_r[-1].h)
     return emb_loss
 
-
-def add_noise(weights, mean=0.0, std=0.5):
-    shape = tf.shape(weights)
-    noise = tf.random_normal(shape, mean, std, dtype=tf.float32)
-    return tf.assign_add(weights, noise) 
 
 def las_model_fn(features,
                  labels,
@@ -385,10 +381,18 @@ def las_model_fn(features,
             capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
             train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
             if params.add_noise:
-                noise_ops = [train_op]
-                for var in var_list:
-                    noise_ops.append(add_noise(var, NOISE_MEAN, NOISE_STD))
-                train_op = tf.group(*noise_ops)
+                def add_noise():
+                    noise_ops = [train_op]
+                    for var in var_list:
+                        if var.name.endswith('kernel:0'):
+                            shape = tf.shape(var)
+                            noise_ops.append(tf.random_normal(shape, NOISE_MEAN, NOISE_STD, dtype=tf.float32))
+                    return tf.group(*noise_ops)
+                train_op = tf.cond(
+                    tf.logical_and(tf.equal(tf.mod(tf.train.get_global_step(), ADD_NOISE_STEP), 0),
+                        tf.greater(tf.train.get_global_step(), 0)),
+                    add_noise,
+                    lambda: train_op)
 
     loss = text_loss if params.use_text and not params.emb_loss else audio_loss
     train_log_data = {
