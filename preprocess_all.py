@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 from speechpy.feature import mfe, mfcc, extract_derivative_feature
 
 from utils import get_ipa, ipa2binf, load_binf2phone
+from external.lyon.calc import LyonCalc
 
 
 SAMPLE_RATE = 16000
@@ -22,6 +23,7 @@ session = tf.Session()
 tfrecord_mutex = Lock()
 stats_mutex = Lock()
 binf2phone = None
+lyon_calc = None
 
 
 def make_example(input, label):
@@ -85,6 +87,13 @@ def calculate_acoustic_features(args, waveform):
         else:
             acoustic_features = librosa.feature.mfcc(y=waveform, sr=SAMPLE_RATE, n_mfcc=args.n_mfcc,
                 n_fft=n_fft, hop_length=hop_length, n_mels=args.n_mels).transpose()
+    elif 'lyon' == args.feature_type:
+        acoustic_features = lyon_calc.lyon_passive_ear(waveform[:, np.newaxis].astype(np.double),
+                                                       SAMPLE_RATE, hop_length)
+        max_val = acoustic_features.max()
+        if max_val > 0:
+            acoustic_features /= max_val
+        acoustic_features = acoustic_features.astype(np.float32)
     else:
         raise ValueError('Unexpected features type.')
     if args.deltas:
@@ -155,7 +164,7 @@ if __name__ == "__main__":
     parser.add_argument('--vocab_file', help='Vocabulary file name.', default=None)
     parser.add_argument('--top_k', help='Max size of vocabulary.', type=int, default=1000)
     parser.add_argument('--feature_type', help='Acoustic feature type.', type=str,
-                        choices=['mfe', 'mfcc'], default='mfcc')
+                        choices=['mfe', 'mfcc', 'lyon'], default='mfcc')
     parser.add_argument('--backend', help='Library for calculating acoustic features.', type=str,
                         choices=['speechpy', 'librosa'], default='librosa')
     parser.add_argument('--n_mfcc', help='Number of MFCC coeffs.', type=int, default=13)
@@ -171,6 +180,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.targets in ('phones', 'binary_features'):
         binf2phone = load_binf2phone(args.binf_map)
+    if args.feature_type == 'lyon':
+        lyon_calc = LyonCalc()
+    if args.feature_type == 'lyon' or args.backend == 'speechpy':
+        print('Forcing n_jobs = 1 for selected configuration.')
+        args.n_jobs = 1
     print('Processing audio dataset from file {}.'.format(args.input_file))
     window = int(SAMPLE_RATE * args.window / 1000.0)
     step = int(SAMPLE_RATE * args.step / 1000.0)

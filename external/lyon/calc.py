@@ -3,7 +3,7 @@ import numpy as np
 import ctypes
 from numpy.ctypeslib import ndpointer
 
-from lyon.utils import design_lyon_filters, epsilon_from_tau, set_gain
+from .utils import design_lyon_filters, epsilon_from_tau, set_gain
 
 
 class LyonCalc:
