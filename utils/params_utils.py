@@ -31,7 +31,7 @@ def get_default_hparams():
         learning_rate=1e-3,
         dropout=0.2,
         l2_reg_scale=1e-6,
-        add_noise=False,
+        add_noise=0,
         emb_loss=False,
         text_loss=False,
         use_text=False,
