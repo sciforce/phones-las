@@ -235,7 +235,8 @@ def speller(encoder_outputs,
     projection_layer = DenseBinfDecoder(
         hparams.target_vocab_size,
         binf_to_ipa=binf_embedding if mode != tf.estimator.ModeKeys.TRAIN else None,
-        use_bias=True, name='projection_layer')
+        use_bias=True, name='projection_layer',
+        kernel_initializer=tf.random_uniform_initializer(minval=-0.075, maxval=0.075))
 
     if hparams.pass_hidden_state and hparams.bottom_only:
         initial_state = tuple(

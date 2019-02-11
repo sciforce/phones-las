@@ -8,7 +8,8 @@ __all__ = [
 
 
 def lstm_cell(num_units, dropout, mode):
-    cell = tf.nn.rnn_cell.LSTMCell(num_units)
+    cell = tf.nn.rnn_cell.LSTMCell(num_units,
+        initializer=tf.random_uniform_initializer(minval=-0.075, maxval=0.075))
 
     dropout = dropout if mode == tf.estimator.ModeKeys.TRAIN else 0.0
 

@@ -30,6 +30,8 @@ def get_default_hparams():
         # global setting
         learning_rate=1e-3,
         dropout=0.2,
+        l2_reg_scale=1e-6,
+        add_noise=0,
         emb_loss=False,
         text_loss=False,
         use_text=False,
@@ -104,6 +106,8 @@ def create_hparams(args, target_vocab_size=None, sos_id=1, eos_id=2):
 def get_encoder_decoder_hparams(hparams):
     learning_rate = hparams.pop_hparam('learning_rate')
     dropout = hparams.pop_hparam('dropout')
+    l2_reg_scale = hparams.pop_hparam('l2_reg_scale')
+    add_noise = hparams.pop_hparam('add_noise')
     mapping = hparams.pop_hparam('mapping')
     emb_loss = hparams.pop_hparam('emb_loss')
     text_loss = hparams.pop_hparam('text_loss')
@@ -131,5 +135,7 @@ def get_encoder_decoder_hparams(hparams):
         emb_loss=emb_loss,
         text_loss=text_loss,
         use_text=use_text,
+        l2_reg_scale=l2_reg_scale,
+        add_noise=add_noise,
         encoder=encoder_hparams,
         decoder=decoder_hparams)
