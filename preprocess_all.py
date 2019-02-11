@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from speechpy.feature import mfe, mfcc, extract_derivative_feature
 
 from utils import get_ipa, ipa2binf, load_binf2phone
-from external.lyon.calc import LyonCalc
+from lyon.calc import LyonCalc
 
 
 SAMPLE_RATE = 16000
