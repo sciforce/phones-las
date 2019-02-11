@@ -390,7 +390,8 @@ def las_model_fn(features,
                     print_op = tf.print('Adding noise to weights')
                     return tf.group(*noise_ops, print_op)
                 train_op = tf.cond(
-                    tf.equal(tf.mod(tf.train.get_global_step(), params.add_noise), 0),
+                    tf.logical_and(tf.equal(tf.mod(tf.train.get_global_step(), params.add_noise), 0),
+                        tf.greater(tf.train.get_global_step(), 0)),
                     add_noise, lambda: train_op)
 
     loss = text_loss if params.use_text and not params.emb_loss else audio_loss
