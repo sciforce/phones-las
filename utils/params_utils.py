@@ -32,6 +32,7 @@ def get_default_hparams():
         dropout=0.2,
         l2_reg_scale=1e-6,
         add_noise=0,
+        noise_std=0.1,
         emb_loss=False,
         text_loss=False,
         use_text=False,
@@ -108,6 +109,7 @@ def get_encoder_decoder_hparams(hparams):
     dropout = hparams.pop_hparam('dropout')
     l2_reg_scale = hparams.pop_hparam('l2_reg_scale')
     add_noise = hparams.pop_hparam('add_noise')
+    noise_std = hparams.pop_hparam('noise_std')
     mapping = hparams.pop_hparam('mapping')
     emb_loss = hparams.pop_hparam('emb_loss')
     text_loss = hparams.pop_hparam('text_loss')
@@ -137,5 +139,6 @@ def get_encoder_decoder_hparams(hparams):
         use_text=use_text,
         l2_reg_scale=l2_reg_scale,
         add_noise=add_noise,
+        noise_std=noise_std,
         encoder=encoder_hparams,
         decoder=decoder_hparams)
