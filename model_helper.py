@@ -14,7 +14,6 @@ __all__ = [
 
 GRAD_NORM = 2
 NOISE_MEAN = 0.0
-NOISE_STD = 0.5
 
 
 def compute_loss(logits, targets, final_sequence_length, target_sequence_length, mode):
@@ -385,7 +384,7 @@ def las_model_fn(features,
                     for var in var_list:
                         if var.name.endswith('kernel:0'):
                             shape = tf.shape(var)
-                            noise_op = tf.assign_add(var, tf.random_normal(shape, NOISE_MEAN, NOISE_STD, dtype=tf.float32))
+                            noise_op = tf.assign_add(var, tf.random_normal(shape, NOISE_MEAN, params.noise_std, dtype=tf.float32))
                             noise_ops.append(noise_op)
                     print_op = tf.print('Adding noise to weights')
                     return tf.group(*noise_ops, print_op)
