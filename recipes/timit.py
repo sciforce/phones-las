@@ -55,7 +55,7 @@ if __name__ == '__main__':
                     text = f.read().strip().replace(',', '')
                     text = ' '.join(text.split()[2:])
                 else:
-                    text = [line.split(' ')[-1]  for line in f.read().strip().split('\n')]
+                    text = [line.split(' ')[-1] for line in f.read().strip().split('\n')]
                     if mapping is not None:
                         text = [mapping[t] for t in text]
                     text = ' '.join([t for t in text if t is not None])
