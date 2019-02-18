@@ -41,6 +41,7 @@ def get_default_hparams():
         encoder_layers=3,
         encoder_units=64,
         use_pyramidal=True,
+        unidirectional=False,
 
         # decoder setting
         decoder_layers=2,
@@ -120,6 +121,7 @@ def get_encoder_decoder_hparams(hparams):
         num_layers=hparams.pop_hparam('encoder_layers'),
         num_units=hparams.pop_hparam('encoder_units'),
         use_pyramidal=hparams.pop_hparam('use_pyramidal'),
+        unidirectional=hparams.pop_hparam('unidirectional'),
         dropout=dropout)
 
     decoder_hparams = HParams(

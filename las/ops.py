@@ -24,19 +24,26 @@ def bilstm(inputs,
            sequence_length,
            num_units,
            dropout,
-           mode):
+           mode,
+           unidirectional=False):
 
     with tf.variable_scope('fw_cell'):
         forward_cell = lstm_cell(num_units, dropout, mode)
-    with tf.variable_scope('bw_cell'):
-        backward_cell = lstm_cell(num_units, dropout, mode)
-
-    return tf.nn.bidirectional_dynamic_rnn(
-        forward_cell,
-        backward_cell,
-        inputs,
-        sequence_length=sequence_length,
-        dtype=tf.float32)
+    if not unidirectional:
+        with tf.variable_scope('bw_cell'):
+            backward_cell = lstm_cell(num_units, dropout, mode)
+        return tf.nn.bidirectional_dynamic_rnn(
+            forward_cell,
+            backward_cell,
+            inputs,
+            sequence_length=sequence_length,
+            dtype=tf.float32)
+    else:
+        return tf.nn.dynamic_rnn(
+            forward_cell,
+            inputs,
+            sequence_length=sequence_length,
+            dtype=tf.float32)
 
 
 def pyramidal_stack(outputs, sequence_length):
@@ -68,7 +75,8 @@ def pyramidal_bilstm(inputs,
     for layer in range(hparams.num_layers):
         with tf.variable_scope('bilstm_{}'.format(layer)):
             outputs, state = bilstm(
-                outputs, sequence_length, hparams.num_units, hparams.dropout, mode)
+                outputs, sequence_length, hparams.num_units, hparams.dropout, mode,
+                hparams.unidirectional)
 
             outputs = tf.concat(outputs, -1)
 
