@@ -35,11 +35,12 @@ if __name__ == '__main__':
                                           '..', 'misc', 'timit_core_test_phrases.txt'), 'r').readlines()
     core_test_phrases = [x.strip() for x in core_test_phrases]
     mapping = None
-    mapping_ind = ['phones60', 'phones48', 'phones39'].index(args.labels_type)
-    if mapping_ind > 0:
-        with open(args.phone_map, 'r') as f:
-            lines = [line.split('\t') for line in f.read().strip().split('\n')]
-            mapping = {line[0]: (line[mapping_ind] if len(line) > mapping_ind else None) for line in lines}
+    if args.labels_type != 'text':
+        mapping_ind = ['phones60', 'phones48', 'phones39'].index(args.labels_type)
+        if mapping_ind > 0:
+            with open(args.phone_map, 'r') as f:
+                lines = [line.split('\t') for line in f.read().strip().split('\n')]
+                mapping = {line[0]: (line[mapping_ind] if len(line) > mapping_ind else None) for line in lines}
 
     for root, _, files in tqdm(os.walk(args.timit_path), desc='Collecting filenames'):
         for audio_filename in filter(lambda x: x.endswith('.WAV'), files):

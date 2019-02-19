@@ -2,6 +2,7 @@ from collections import Counter
 import librosa
 import tensorflow as tf
 import numpy as np
+import warnings
 from tqdm import tqdm
 from multiprocessing import Lock
 from joblib import Parallel, delayed, dump
@@ -157,6 +158,8 @@ def process_line(args, writer, line):
 
 
 if __name__ == "__main__":
+    warnings.simplefilter(action='ignore', category=FutureWarning)
+
     parser = ArgumentParser()
     parser.add_argument('--input_file', help='File with audio paths and texts.', required=True)
     parser.add_argument('--output_file', help='Target TFRecord file name.', required=True)
