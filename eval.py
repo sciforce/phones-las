@@ -17,6 +17,8 @@ def parse_args():
                         help='vocabulary table, listing vocabulary line by line')
     parser.add_argument('--norm', type=str, default=None,
                         help='normalization params')
+    parser.add_argument('--mapping', type=str,
+                        help='additional mapping when evaluation')
     parser.add_argument('--model_dir', type=str, required=True,
                         help='path of saving model')
 
