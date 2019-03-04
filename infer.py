@@ -2,7 +2,6 @@ import argparse
 import os
 import tensorflow as tf
 from joblib import dump
-import numpy as np
 from tqdm import tqdm
 from editdistance import eval as edist
 
@@ -112,9 +111,13 @@ def main(args):
             phrase = phrase.split()
             phrase = [x.strip().lower() for x in phrase]
             targets.append(phrase)
+        save_to = os.path.join(args.model_dir, 'infer_targets.txt')
+        with open(save_to, 'w') as f:
+            f.write('\n'.join(args.delimiter.join(t) for t in targets))
         err = 0
         tot = 0
         for p, t in tqdm(zip(predictions, targets)):
+            text = []
             for bi, i in enumerate(p['sample_ids'].T):
                 if bi > 0:
                     break
