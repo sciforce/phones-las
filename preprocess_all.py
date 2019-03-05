@@ -7,8 +7,9 @@ from multiprocessing import Lock
 from joblib import Parallel, delayed, dump
 from argparse import ArgumentParser
 from speechpy.feature import mfe, mfcc, extract_derivative_feature
+import sys
 
-from utils import get_ipa, ipa2binf, load_binf2phone
+from utils import get_ipa, ipa2binf, load_binf2phone, IPAError
 from lyon.calc import LyonCalc
 
 
@@ -164,7 +165,14 @@ def process_line(args, writer, line):
         'language': language
     }
     out = read_audio_and_text(inputs)
-    out = build_features_and_vocabulary_fn(args, out)
+    try:
+        out = build_features_and_vocabulary_fn(args, out)
+    except IPAError:
+        print('Failed to convert text to IPA! Exiting...')
+        sys.exit(-1)
+    except Exception as e:
+        print(f'Hopefully recoverable error: {str(e)}')
+        return
     write_tf_output(writer, out)
 
 
