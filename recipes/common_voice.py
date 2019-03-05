@@ -17,7 +17,7 @@ for t in types:
     with open(os.path.join(args.output_dir, '{}.csv'.format(t)), 'w') as output:
         with open(os.path.join(base_path, '{}.tsv'.format(t)), 'r') as f:
             reader = csv.DictReader(f, dialect='excel-tab')
-            for row in tqdm(f, desc='Processing {} for {}'.format(t, args.language), unit='file'):
+            for row in tqdm(reader, desc='Processing {} for {}'.format(t, args.language), unit='file'):
                 text = row['sentence'].strip().replace(',', '')
                 audio_path = os.path.join(base_path, 'clips', '{}.mp3'.format(row['path']))
                 write_text = '{},{},{}\n'.format(audio_path, args.language, text)
