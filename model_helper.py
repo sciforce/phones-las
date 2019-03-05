@@ -354,10 +354,11 @@ def las_model_fn(features,
             capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
             audio_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
             gvs = optimizer.compute_gradients(text_loss, var_list=text_var_list)
-            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+            # No attention means that top layers won't affect anything.Thus gradients for them would be None.
+            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs if grad is not None]
             text_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
             gvs = optimizer.compute_gradients(emb_loss, var_list=audio_var_list)
-            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs if grad is not None]
             emb_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
             if not params.text_loss:
                 tf.logging.info('Removing reader and writer from optimization.')
