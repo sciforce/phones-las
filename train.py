@@ -147,12 +147,12 @@ def main(args):
         train_spec = tf.estimator.TrainSpec(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=binf2phone))
+                num_epochs=args.num_epochs, binf2phone=None))
 
         eval_spec = tf.estimator.EvalSpec(
             input_fn=lambda: input_fn(
                 args.valid or args.train, args.vocab, args.norm, num_channels=args.num_channels,
-                batch_size=args.batch_size, binf2phone=binf2phone),
+                batch_size=args.batch_size, binf2phone=None),
             start_delay_secs=60,
             throttle_secs=args.eval_secs)
 
@@ -161,7 +161,7 @@ def main(args):
         model.train(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=binf2phone))
+                num_epochs=args.num_epochs, binf2phone=None))
 
 
 if __name__ == '__main__':

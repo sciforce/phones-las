@@ -4,7 +4,8 @@ import tensorflow.contrib as tf_contrib
 __all__ = [
     'TrainingSigmoidHelper',
     'ScheduledSigmoidHelper',
-    'DenseBinfDecoder'
+    'DenseBinfDecoder',
+    'transform_binf_to_phones'
 ]
 
 def transform_binf_to_phones(outputs, binf_to_ipa):

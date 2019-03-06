@@ -7,6 +7,8 @@ import las
 import utils
 import text_ae.model
 
+from utils.training_helper import transform_binf_to_phones
+
 __all__ = [
     'las_model_fn',
 ]
@@ -168,6 +170,11 @@ def las_model_fn(features,
         decoder_inputs = labels['targets_inputs']
         targets = labels['targets_outputs']
         target_sequence_length = labels['target_sequence_length']
+        decoder_inputs_binf = None
+        if binf_embedding is not None:
+            targets_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), targets)
+            decoder_inputs_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), decoder_inputs)
+
 
     text_loss = 0
     text_edit_distance = reader_encoder_state = None
@@ -215,7 +222,8 @@ def las_model_fn(features,
 
     with tf.variable_scope('speller'):
         decoder_outputs, final_context_state, final_sequence_length = las.model.speller(
-            encoder_outputs, encoder_state, decoder_inputs,
+            encoder_outputs, encoder_state,
+            decoder_inputs_binf if decoder_inputs_binf is not None else decoder_inputs,
             source_sequence_length, target_sequence_length,
             mode, params.decoder, binf_embedding)
 
@@ -226,16 +234,20 @@ def las_model_fn(features,
         else:
             logits = decoder_outputs.rnn_output
             if is_binf_outputs:
-                sample_ids = tf.to_int32(tf.round(tf.sigmoid(logits)))
+                sample_ids_binf = tf.to_int32(tf.round(tf.sigmoid(logits)))
+                sample_ids_phones = tf.to_int32(tf.argmax(transform_binf_to_phones(logits, binf_embedding), -1))
             else:
-                sample_ids = tf.to_int32(tf.argmax(logits, -1))
+                sample_ids_phones = tf.to_int32(tf.argmax(logits, -1))
+                sample_ids_binf = None
+                if binf_embedding is not None:
+                    sample_ids_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), sample_ids_phones)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         emb_c = tf.concat([x.c for x in encoder_state], axis=1)
         emb_h = tf.concat([x.h for x in encoder_state], axis=1)
         emb = tf.stack([emb_c, emb_h], axis=1)
         predictions = {
-            'sample_ids': sample_ids,
+            'sample_ids': sample_ids_phones,
             'embedding': emb,
             'encoder_out': encoder_outputs,
             'source_length': source_sequence_length
@@ -260,39 +272,29 @@ def las_model_fn(features,
 
     metrics = None
 
-    if binf_embedding is not None and not is_binf_outputs:
-        binf_to_ipa_tiled = tf.cast(
-            tf.tile(binf_embedding[None, :, :], [tf.shape(targets)[0], 1, 1]), tf.int32)
-        targets_transformed = tf.cast(
-            tf.argmax(tf.matmul(targets, binf_to_ipa_tiled) + tf.matmul(1 - targets, 1 - binf_to_ipa_tiled), -1), tf.int32)
+    with tf.name_scope('metrics'):
+        edit_distance = utils.edit_distance(
+            sample_ids_phones, targets, utils.EOS_ID, params.mapping)
+
+        metrics = {
+            'edit_distance': tf.metrics.mean(edit_distance),
+        }
+    if params.use_text and not params.emb_loss:
+        pass
     else:
-        targets_transformed = targets
-
-    if not is_binf_outputs:
-        with tf.name_scope('metrics'):
-            edit_distance = utils.edit_distance(
-                sample_ids, targets_transformed, utils.EOS_ID, params.mapping)
-
-            metrics = {
-                'edit_distance': tf.metrics.mean(edit_distance),
-            }
-        if params.use_text and not params.emb_loss:
-            pass
+        # In TRAIN model this becomes an significantly affected by early high values.
+        # As a result in summaries train values would be high and drop after restart.
+        # To prevent this, we use last batch average in case of TRAIN.
+        if mode != tf.estimator.ModeKeys.TRAIN:
+            tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
         else:
-            # In TRAIN model this becomes an significantly affected by early high values.
-            # As a result in summaries train values would be high and drop after restart.
-            # To prevent this, we use last batch average in case of TRAIN.
-            if mode != tf.estimator.ModeKeys.TRAIN:
-                tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
-            else:
-                tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance))
-    else:
-        edit_distance = None
+            tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance))
 
     with tf.name_scope('cross_entropy'):
         loss_fn = compute_loss_sigmoid if is_binf_outputs else compute_loss
+        audio_loss_targets = targets_binf if is_binf_outputs else targets
         audio_loss = loss_fn(
-            logits, targets_transformed, final_sequence_length, target_sequence_length, mode)
+            logits, audio_loss_targets, final_sequence_length, target_sequence_length, mode)
 
     emb_loss = 0
     if params.use_text:
@@ -320,20 +322,19 @@ def las_model_fn(features,
                 summary_op=attention_summary)
             hooks = [eval_summary_hook]
             loss = audio_loss
-        if not is_binf_outputs:
-            log_data = {
-                'edit_distance': tf.reduce_mean(edit_distance),
-                'max_edit_distance': tf.reduce_max(edit_distance),
-                'min_edit_distance': tf.reduce_min(edit_distance)
-            }
-            if params.use_text:
-                if not params.emb_loss:
-                    log_data = {}
-                else:
-                    log_data['emb_loss'] = tf.reduce_mean(emb_loss)
-                log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
-            logging_hook = tf.train.LoggingTensorHook(log_data, every_n_iter=20)
-            hooks += [logging_hook]
+        log_data = {
+            'edit_distance': tf.reduce_mean(edit_distance),
+            'max_edit_distance': tf.reduce_max(edit_distance),
+            'min_edit_distance': tf.reduce_min(edit_distance)
+        }
+        if params.use_text:
+            if not params.emb_loss:
+                log_data = {}
+            else:
+                log_data['emb_loss'] = tf.reduce_mean(emb_loss)
+            log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
+        logging_hook = tf.train.LoggingTensorHook(log_data, every_n_iter=20)
+        hooks += [logging_hook]
 
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics,
                                           evaluation_hooks=hooks)
@@ -397,14 +398,13 @@ def las_model_fn(features,
     train_log_data = {
         'loss': loss
     }
-    if not is_binf_outputs:
-        if params.use_text:
-            if params.emb_loss:
-                train_log_data['edit_distance'] = tf.reduce_mean(edit_distance)
-                train_log_data['emb_loss'] = tf.reduce_mean(emb_loss)
-            train_log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
-        else:
+    if params.use_text:
+        if params.emb_loss:
             train_log_data['edit_distance'] = tf.reduce_mean(edit_distance)
+            train_log_data['emb_loss'] = tf.reduce_mean(emb_loss)
+        train_log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
+    else:
+        train_log_data['edit_distance'] = tf.reduce_mean(edit_distance)
     logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
 
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
