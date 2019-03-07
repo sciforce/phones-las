@@ -166,11 +166,11 @@ def las_model_fn(features,
     is_binf_outputs = params.decoder.binary_outputs and (
         binf_embedding is None or mode == tf.estimator.ModeKeys.TRAIN)
 
+    decoder_inputs_binf = None
     if mode != tf.estimator.ModeKeys.PREDICT:
         decoder_inputs = labels['targets_inputs']
         targets = labels['targets_outputs']
         target_sequence_length = labels['target_sequence_length']
-        decoder_inputs_binf = None
         if binf_embedding is not None:
             targets_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), targets)
             decoder_inputs_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), decoder_inputs)
@@ -230,7 +230,7 @@ def las_model_fn(features,
     with tf.name_scope('prediction'):
         if mode == tf.estimator.ModeKeys.PREDICT and params.decoder.beam_width > 0:
             logits = tf.no_op()
-            sample_ids = decoder_outputs.predicted_ids
+            sample_ids_phones = decoder_outputs.predicted_ids
         else:
             logits = decoder_outputs.rnn_output
             if is_binf_outputs:

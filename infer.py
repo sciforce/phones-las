@@ -101,7 +101,7 @@ def main(args):
     predictions = model.predict(
         input_fn=lambda: input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-            take=args.take, binf2phone=binf2phone),
+            take=args.take, binf2phone=None),
         predict_keys=['sample_ids', 'embedding'])
 
     predictions = list(predictions)
@@ -115,13 +115,15 @@ def main(args):
         err = 0
         tot = 0
         for p, t in tqdm(zip(predictions, targets)):
-            for bi, i in enumerate(p['sample_ids'].T):
-                if bi > 0:
-                    break
-                i = i.tolist() + [utils.EOS_ID]
-                i = i[:i.index(utils.EOS_ID)]
-                text = to_text(vocab_list, i)
-                text = text.split(args.delimiter)
+            beams = p['sample_ids'].T
+            if len(beams.shape) > 1:
+                i = beams[0]
+            else:
+                i = beams
+            i = i.tolist() + [utils.EOS_ID]
+            i = i[:i.index(utils.EOS_ID)]
+            text = to_text(vocab_list, i)
+            text = text.split(args.delimiter)
             err += edist(text, t)
             tot += len(t)
         print(f'PER: {100 * err / tot:2.2f}%')
