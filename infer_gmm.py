@@ -36,6 +36,7 @@ if __name__ == '__main__':
         diagram = np.zeros((d.shape[0], num_mixtures))
         for i, j in enumerate(assignments_val[0][0]):
             diagram[i, j] = 1
+        plt.axis([0, diagram.shape[0], scores_val.min(), scores_val.max()])
         plt.subplot(312)
         plt.imshow(diagram.T, aspect='auto')
         plt.subplot(313)

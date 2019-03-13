@@ -116,18 +116,23 @@ def main(args):
             f.write('\n'.join(args.delimiter.join(t) for t in targets))
         err = 0
         tot = 0
+        optimistic_err = 0
         for p, t in tqdm(zip(predictions, targets)):
-            text = []
+            first_text = []
+            min_err = 100000
             for bi, i in enumerate(p['sample_ids'].T):
-                if bi > 0:
-                    break
                 i = i.tolist() + [utils.EOS_ID]
                 i = i[:i.index(utils.EOS_ID)]
                 text = to_text(vocab_list, i)
                 text = text.split(args.delimiter)
-            err += edist(text, t)
+                min_err = min([min_err, edist(text, t)])
+                if bi == 0:
+                    first_text = text.copy()
+            err += edist(first_text, t)
+            optimistic_err += min_err
             tot += len(t)
         print(f'PER: {100 * err / tot:2.2f}%')
+        print(f'Optimistic PER: {100 * optimistic_err / tot:2.2f}%')
 
     if args.beam_width > 0:
         predictions = [{

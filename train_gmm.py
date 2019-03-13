@@ -44,19 +44,21 @@ if __name__ == '__main__':
     saver = tf.train.Saver(max_to_keep=3)
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    initial_chunk = []
+    all_data = []
+    chunks = 10
     for d in input_fn(dataset, means, stds):
-        initial_chunk.append(d[::10, :])
-    initial_chunk = np.concatenate(initial_chunk, axis=0)
-    sess.run(init_op, {data_in: initial_chunk})
+        all_data.append(d)
+    all_data = np.concatenate(all_data, axis=0)
+    sess.run(init_op, {data_in: all_data})
     print('Training loop')
     handle = tqdm()
     best_loss = loss_avg = validate(loss, val_dataset, means, stds, sess, data_in)
     handle.write(f'Initial: {loss_avg:2.2f}')
     for i in range(50):
-        _, loss_val = sess.run([train_op, loss], {data_in: initial_chunk})
-        handle.set_description(f'Loss: {loss_val:2.3f}')
-        handle.update()
+        for di in range(chunks):
+            _, loss_val = sess.run([train_op, loss], {data_in: all_data[di::chunks, :]})
+            handle.set_description(f'Loss: {loss_val:2.3f}')
+            handle.update()
         loss_avg = validate(loss, val_dataset, means, stds, sess, data_in)
         handle.write(f'Epoch {i}: {loss_avg:2.2f}')
         if loss_avg > best_loss:
