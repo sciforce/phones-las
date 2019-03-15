@@ -166,10 +166,17 @@ def las_model_fn(features,
     is_binf_outputs = params.decoder.binary_outputs and (
         binf_embedding is None or mode == tf.estimator.ModeKeys.TRAIN)
 
+    mapping = None
+    if params.mapping and binf_embedding is not None:
+        mapping = tf.convert_to_tensor(params.mapping)
+
     decoder_inputs_binf = None
     if mode != tf.estimator.ModeKeys.PREDICT:
         decoder_inputs = labels['targets_inputs']
         targets = labels['targets_outputs']
+        if mapping is not None:
+            decoder_inputs = tf.nn.embedding_lookup(mapping, decoder_inputs)
+            targets = tf.nn.embedding_lookup(mapping, targets)
         target_sequence_length = labels['target_sequence_length']
         if binf_embedding is not None:
             targets_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), targets)
@@ -200,7 +207,7 @@ def las_model_fn(features,
 
         with tf.name_scope('text_metrics'):
             text_edit_distance = utils.edit_distance(
-                sample_ids, targets, utils.EOS_ID, params.mapping)
+                sample_ids, targets, utils.EOS_ID, params.mapping if mapping is None else None)
 
             metrics = {
                 'text_edit_distance': tf.metrics.mean(text_edit_distance),
@@ -274,7 +281,7 @@ def las_model_fn(features,
 
     with tf.name_scope('metrics'):
         edit_distance = utils.edit_distance(
-            sample_ids_phones, targets, utils.EOS_ID, params.mapping)
+            sample_ids_phones, targets, utils.EOS_ID, params.mapping if mapping is None else None)
 
         metrics = {
             'edit_distance': tf.metrics.mean(edit_distance),
