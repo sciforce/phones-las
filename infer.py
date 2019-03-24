@@ -23,6 +23,8 @@ def parse_args():
                         help='vocabulary table, listing vocabulary line by line')
     parser.add_argument('--norm', type=str, default=None,
                         help='normalization params')
+    parser.add_argument('--mapping', type=str,
+                        help='additional mapping when evaluation')
     parser.add_argument('--model_dir', type=str, required=True,
                         help='path of imported model')
 
@@ -78,14 +80,17 @@ def main(args):
     hparams.decoder.set_hparam('beam_width', args.beam_width)
 
     vocab_list = utils.load_vocab(args.vocab)
+    vocab_list_orig = vocab_list
     binf2phone_np = None
     binf2phone = None
-    if not hparams.decoder.binary_outputs:
-        vocab_size = len(vocab_list)
-    else:
+    mapping = None
+    if hparams.decoder.binary_outputs:
+        if args.mapping is not None:
+            vocab_list, mapping = utils.get_mapping(args.mapping, args.vocab)
+            hparams.del_hparam('mapping')
+            hparams.add_hparam('mapping', mapping)
+
         binf2phone = utils.load_binf2phone(args.binf_map, vocab_list)
-        vocab_size = len(binf2phone.index)
-        vocab_list = binf2phone.columns
         binf2phone_np = binf2phone.values
 
     def model_fn(features, labels,
@@ -122,6 +127,10 @@ def main(args):
                 i = beams
             i = i.tolist() + [utils.EOS_ID]
             i = i[:i.index(utils.EOS_ID)]
+            if mapping is not None:
+                target_ids = np.array([vocab_list_orig.index(p) for p in t])
+                target_ids = np.array(mapping)[target_ids]
+                t = [vocab_list[i] for i in target_ids]
             text = to_text(vocab_list, i)
             text = text.split(args.delimiter)
             err += edist(text, t)
