@@ -119,20 +119,20 @@ def main(args):
     binf2phone_np = None
     binf2phone = None
     mapping = None
-    if args.binary_outputs is None:
-        vocab_size = len(vocab_list)
-    else:
+    vocab_size = len(vocab_list)
+    binf_count = None
+    if args.binary_outputs is not None:
         if args.mapping is not None:
             vocab_list, mapping = utils.get_mapping(args.mapping, args.vocab)
             args.mapping = None
         binf2phone = utils.load_binf2phone(args.binf_map, vocab_list)
-        vocab_size = len(binf2phone.index)
+        binf_count = len(binf2phone.index)
         if args.output_ipa:
             binf2phone_np = binf2phone.values
 
     config = tf.estimator.RunConfig(model_dir=args.model_dir)
     hparams = utils.create_hparams(
-        args, vocab_size, utils.SOS_ID, utils.EOS_ID)
+        args, vocab_size, binf_count, utils.SOS_ID, utils.EOS_ID)
     if mapping is not None:
         hparams.del_hparam('mapping')
         hparams.add_hparam('mapping', mapping)

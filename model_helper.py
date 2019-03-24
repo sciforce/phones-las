@@ -170,7 +170,6 @@ def las_model_fn(features,
     if params.mapping and binf_embedding is not None:
         mapping = tf.convert_to_tensor(params.mapping)
 
-    decoder_inputs_binf = None
     if mode != tf.estimator.ModeKeys.PREDICT:
         decoder_inputs = labels['targets_inputs']
         targets = labels['targets_outputs']
@@ -181,7 +180,6 @@ def las_model_fn(features,
         if binf_embedding is not None:
             targets_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), targets)
             decoder_inputs_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), decoder_inputs)
-
 
     text_loss = 0
     text_edit_distance = reader_encoder_state = None
@@ -229,10 +227,17 @@ def las_model_fn(features,
 
     with tf.variable_scope('speller'):
         decoder_outputs, final_context_state, final_sequence_length = las.model.speller(
-            encoder_outputs, encoder_state,
-            decoder_inputs_binf if decoder_inputs_binf is not None else decoder_inputs,
+            encoder_outputs, encoder_state, decoder_inputs,
             source_sequence_length, target_sequence_length,
-            mode, params.decoder, binf_embedding)
+            mode, params.decoder)
+
+    decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = None, None, None
+    if is_binf_outputs:
+        with tf.variable_scope('speller_binf'):
+            decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = las.model.speller(
+                encoder_outputs, encoder_state, decoder_inputs_binf,
+                source_sequence_length, target_sequence_length,
+                mode, params.decoder, True, binf_embedding)
 
     with tf.name_scope('prediction'):
         if mode == tf.estimator.ModeKeys.PREDICT and params.decoder.beam_width > 0:
@@ -240,14 +245,11 @@ def las_model_fn(features,
             sample_ids_phones = decoder_outputs.predicted_ids
         else:
             logits = decoder_outputs.rnn_output
+            sample_ids_phones = tf.to_int32(tf.argmax(logits, -1))
+            sample_ids_binf = None
             if is_binf_outputs:
-                sample_ids_binf = tf.to_int32(tf.round(tf.sigmoid(logits)))
-                sample_ids_phones = tf.to_int32(tf.argmax(transform_binf_to_phones(logits, binf_embedding), -1))
-            else:
-                sample_ids_phones = tf.to_int32(tf.argmax(logits, -1))
-                sample_ids_binf = None
-                if binf_embedding is not None:
-                    sample_ids_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), sample_ids_phones)
+                logits_binf = decoder_outputs_binf.rnn_output
+                sample_ids_binf = tf.to_int32(tf.round(tf.sigmoid(logits_binf)))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         emb_c = tf.concat([x.c for x in encoder_state], axis=1)
@@ -298,10 +300,13 @@ def las_model_fn(features,
             tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance))
 
     with tf.name_scope('cross_entropy'):
-        loss_fn = compute_loss_sigmoid if is_binf_outputs else compute_loss
-        audio_loss_targets = targets_binf if is_binf_outputs else targets
-        audio_loss = loss_fn(
-            logits, audio_loss_targets, final_sequence_length, target_sequence_length, mode)
+        audio_loss = compute_loss(
+            logits, targets, final_sequence_length, target_sequence_length, mode)
+    if is_binf_outputs:
+        with tf.name_scope('cross_entropy_binf'):
+            audio_loss_binf = compute_loss_sigmoid(logits_binf, targets_binf,
+                final_sequence_length, target_sequence_length, mode)
+        audio_loss += audio_loss_binf
 
     emb_loss = 0
     if params.use_text:
