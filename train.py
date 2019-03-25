@@ -121,7 +121,7 @@ def main(args):
     mapping = None
     vocab_size = len(vocab_list)
     binf_count = None
-    if args.binary_outputs is not None:
+    if args.binary_outputs:
         if args.mapping is not None:
             vocab_list, mapping = utils.get_mapping(args.mapping, args.vocab)
             args.mapping = None
