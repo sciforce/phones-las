@@ -21,7 +21,7 @@ class IPAError(ValueError):
 
 DIACRITICS_LIST = r'̆|\.|\||‖|↗|↘|\d|-'
 STRESS_DIACRITICS = r'ˈ|ˌ'
-GEMINATION_DIACRITICS = r'ː|ˑ'
+GEMINATION_DIACRITICS = r'ː|ˑ|:'
 
 SEP = ','
 
@@ -64,11 +64,12 @@ def _postprocessing(ipa, language, remove_all_diacritics=False,
         # presence of character names instead of phonemes.
         # Such transcription is useless.
         raise IPAError(ipa)
+    diacritics = DIACRITICS_LIST
     if remove_all_diacritics:
         # remove diacritics
-        ipa = ''.join(x for x in ipa if x.isalnum())
-    else:
-        ipa = re.sub(DIACRITICS_LIST, '', ipa)
+        # ipa = ''.join(x for x in ipa if x.isalnum())
+        diacritics = r'|'.join((DIACRITICS_LIST, STRESS_DIACRITICS))
+    ipa = re.sub(diacritics, '', ipa)
     ipa = re.sub(r'([\r\n])', ' ', ipa)
     # split by phonenes, keeping spaces
     ipa = [p for word in ipa.split(' ') for p in itertools.chain(word.split('_'), ' ') if p != '']
@@ -117,6 +118,16 @@ def _postprocess_by_languages(text, language, split_all_diphthongs):
     if 'en' in language:
         text = re.sub('əl', 'l', text)
         text = re.sub('(\w+)ɹ', r'\1˞', text)
+    if language == 'tn':
+        text = re.sub('K', 'ɬ', text)
+    if language == 'ky':
+        # Replace SAMPA characters with IPA ones
+        text = re.sub('S', 'ʃ', text)
+        text = re.sub('Z', 'ʒ', text)
+        text = re.sub('oe', 'œ', text)
+        text = re.sub('\[', '', text)
+        text = re.sub('N', 'ŋ', text)
+        text = re.sub('X', 'χ', text)
     if language == 'de':
         text = re.sub('pf', 'p̪f', text)
     if language == 'la':

@@ -119,7 +119,7 @@ def build_features_and_vocabulary_fn(args, inputs):
     if args.targets in ('phones', 'binary_features'):
         if language not in ['arpabet', 'ipa']:
             text = ' '.join(text)
-            text = get_ipa(text, language)
+            text = get_ipa(text, language, remove_all_diacritics=args.remove_diacritics)
         if args.targets == 'binary_features':
             binf = ipa2binf(text, binf2phone, 'ipa'==language)
     vocabulary.update(text)
@@ -180,7 +180,11 @@ if __name__ == "__main__":
                         choices=['words', 'phones', 'binary_features'], default='words')
     parser.add_argument('--binf_map', help='Path to CSV with phonemes to binary features map',
                         type=str, default='misc/binf_map.csv')
+    parser.add_argument('--remove_diacritics', help='Remove diacritics from phones targets',
+                        action='store_true')
+    parser.add_argument('--count', help='Maximal phrases count, -1 for all phrases', type=int, default=-1)
     args = parser.parse_args()
+
     if args.targets in ('phones', 'binary_features'):
         binf2phone = load_binf2phone(args.binf_map)
     if args.feature_type == 'lyon':
@@ -192,6 +196,8 @@ if __name__ == "__main__":
     window = int(SAMPLE_RATE * args.window / 1000.0)
     step = int(SAMPLE_RATE * args.step / 1000.0)
     lines = open(args.input_file, 'r').readlines()
+    if args.count > 0 and args.count < len(lines):
+        lines = lines[:args.count]
     par_handle = tqdm(unit='sound')
     with tf.io.TFRecordWriter(args.output_file) as writer:
         if args.n_jobs > 1:

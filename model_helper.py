@@ -156,7 +156,7 @@ def las_model_fn(features,
     encoder_inputs = features['encoder_inputs']
     source_sequence_length = features['source_sequence_length']
 
-    decoder_inputs = None
+    decoder_inputs, decoder_inputs_binf = None, None
     targets = None
     target_sequence_length = None
 
@@ -232,24 +232,29 @@ def las_model_fn(features,
             mode, params.decoder)
 
     decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = None, None, None
-    if is_binf_outputs:
+    if params.decoder.binary_outputs:
         with tf.variable_scope('speller_binf'):
             decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = las.model.speller(
                 encoder_outputs, encoder_state, decoder_inputs_binf,
                 source_sequence_length, target_sequence_length,
                 mode, params.decoder, True, binf_embedding)
 
+    sample_ids_phones_binf, sample_ids_binf, logits_binf = None, None, None
     with tf.name_scope('prediction'):
         if mode == tf.estimator.ModeKeys.PREDICT and params.decoder.beam_width > 0:
             logits = tf.no_op()
             sample_ids_phones = decoder_outputs.predicted_ids
+            if decoder_outputs_binf is not None:
+                sample_ids_phones_binf = decoder_outputs.predicted_ids
         else:
             logits = decoder_outputs.rnn_output
             sample_ids_phones = tf.to_int32(tf.argmax(logits, -1))
-            sample_ids_binf = None
-            if is_binf_outputs:
+            if decoder_outputs_binf is not None:
                 logits_binf = decoder_outputs_binf.rnn_output
-                sample_ids_binf = tf.to_int32(tf.round(tf.sigmoid(logits_binf)))
+                if is_binf_outputs:
+                    sample_ids_binf = tf.to_int32(tf.round(tf.sigmoid(logits_binf)))
+                else:
+                    sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_binf, -1))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         emb_c = tf.concat([x.c for x in encoder_state], axis=1)
@@ -259,7 +264,9 @@ def las_model_fn(features,
             'sample_ids': sample_ids_phones,
             'embedding': emb,
             'encoder_out': encoder_outputs,
-            'source_length': source_sequence_length
+            'source_length': source_sequence_length,
+            'logits_binf': logits_binf,
+            'sample_ids_phones_binf': sample_ids_phones_binf
         }
         try:
             predictions['alignment'] = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])

@@ -8,6 +8,7 @@ from editdistance import eval as edist
 
 import utils
 from model_helper import las_model_fn
+from utils import get_ipa
 
 
 def parse_args():
@@ -38,6 +39,10 @@ def parse_args():
     parser.add_argument('--take', help='Use this number of elements (0 for all).', type=int, default=0)
     parser.add_argument('--binf_map', type=str, default='misc/binf_map.csv',
                         help='Path to CSV with phonemes to binary features map')
+    parser.add_argument('--use_phones_from_binf', help='User phonemes decoded from binary features decoder outputs.',
+                        action='store_true')
+    parser.add_argument('--convert_targets_to_ipa', help='Convert targets to ipa before comparison.',
+                        action='store_true')
 
     return parser.parse_args()
 
@@ -103,24 +108,35 @@ def main(args):
         config=config,
         params=hparams)
 
+    phone_pred_key = 'sample_ids_phones_binf' if args.use_phones_from_binf else 'sample_ids'
     predictions = model.predict(
         input_fn=lambda: input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
             take=args.take, binf2phone=None),
-        predict_keys=['sample_ids', 'embedding'])
+        predict_keys=[phone_pred_key, 'embedding'])
 
     predictions = list(predictions)
     if args.plain_targets:
         targets = []
         for line in open(args.plain_targets, 'r'):
-            _, _, phrase = line.split(',')
-            phrase = phrase.split()
-            phrase = [x.strip().lower() for x in phrase]
+            delim = ','
+            if '\t' in line:
+                delim = '\t'
+            cells = line.split(delim)
+            _, lang, phrase = cells[:3]
+            if args.convert_targets_to_ipa:
+                if len(cells) == 4:
+                    phrase = cells[-1].split(',')
+                else:
+                    phrase = get_ipa(phrase, lang)
+            else:
+                phrase = phrase.split()
+                phrase = [x.strip().lower() for x in phrase]
             targets.append(phrase)
         err = 0
         tot = 0
         for p, t in tqdm(zip(predictions, targets)):
-            beams = p['sample_ids'].T
+            beams = p[phone_pred_key].T
             if len(beams.shape) > 1:
                 i = beams[0]
             else:
@@ -139,12 +155,12 @@ def main(args):
 
     if args.beam_width > 0:
         predictions = [{
-            'transcription': to_text(vocab_list, y['sample_ids'][:, 0]),
+            'transcription': to_text(vocab_list, y[phone_pred_key][:, 0]),
             'embedding': y['embedding']
         } for y in predictions]
     else:
         predictions = [{
-            'transcription': to_text(vocab_list, y['sample_ids']),
+            'transcription': to_text(vocab_list, y[phone_pred_key]),
             'embedding': y['embedding']
         } for y in predictions]
     
