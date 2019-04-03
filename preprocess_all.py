@@ -122,6 +122,8 @@ def build_features_and_vocabulary_fn(args, inputs):
             text = get_ipa(text, language, remove_all_diacritics=args.remove_diacritics)
         if args.targets == 'binary_features':
             binf = ipa2binf(text, binf2phone, 'ipa'==language)
+    elif args.targets == 'chars':
+        text = [c for c in ' '.join(text)]
     vocabulary.update(text)
     acoustic_features = calculate_acoustic_features(args, waveform)
     if args.norm_file:
@@ -177,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument('--deltas', help='Calculate deltas and double-deltas.', action='store_true')
     parser.add_argument('--n_jobs', help='Number of parallel jobs.', type=int, default=4)
     parser.add_argument('--targets', help='Determines targets type.', type=str,
-                        choices=['words', 'phones', 'binary_features'], default='words')
+                        choices=['words', 'phones', 'binary_features', 'chars'], default='words')
     parser.add_argument('--binf_map', help='Path to CSV with phonemes to binary features map',
                         type=str, default='misc/binf_map.csv')
     parser.add_argument('--remove_diacritics', help='Remove diacritics from phones targets',

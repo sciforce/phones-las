@@ -140,8 +140,6 @@ def main(args):
     def model_fn(features, labels,
         mode, config, params):
         binf_map = binf2phone_np
-        if tf.estimator.ModeKeys.TRAIN == mode and args.binf_sampling:
-            binf_map = None
         return las_model_fn(features, labels, mode, config, params,
             binf2phone=binf_map)
 

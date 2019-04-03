@@ -163,7 +163,7 @@ def las_model_fn(features,
     binf_embedding = None
     if binf2phone is not None and params.decoder.binary_outputs:
         binf_embedding = tf.constant(binf2phone, dtype=tf.float32, name='binf2phone')
-    is_binf_outputs = params.decoder.binary_outputs and (
+    is_binf_outputs = params.decoder.binary_outputs and params.decoder.binf_sampling and (
         binf_embedding is None or mode == tf.estimator.ModeKeys.TRAIN)
 
     mapping = None
@@ -237,7 +237,8 @@ def las_model_fn(features,
             decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = las.model.speller(
                 encoder_outputs, encoder_state, decoder_inputs_binf,
                 source_sequence_length, target_sequence_length,
-                mode, params.decoder, True, binf_embedding)
+                mode, params.decoder, True,
+                binf_embedding if not params.decoder.binf_sampling else None)
 
     sample_ids_phones_binf, sample_ids_binf, logits_binf = None, None, None
     with tf.name_scope('prediction'):
@@ -264,10 +265,13 @@ def las_model_fn(features,
             'sample_ids': sample_ids_phones,
             'embedding': emb,
             'encoder_out': encoder_outputs,
-            'source_length': source_sequence_length,
-            'logits_binf': logits_binf,
-            'sample_ids_phones_binf': sample_ids_phones_binf
+            'source_length': source_sequence_length
         }
+        if logits_binf is not None:
+            predictions['logits_binf'] = logits_binf
+        if sample_ids_phones_binf is not None:
+            predictions['sample_ids_phones_binf'] = sample_ids_phones_binf
+
         try:
             predictions['alignment'] = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])
         except AttributeError:

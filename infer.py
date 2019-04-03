@@ -5,11 +5,18 @@ from joblib import dump
 import numpy as np
 from tqdm import tqdm
 from editdistance import eval as edist
+import librosa
+import pandas as pd
 
 import utils
 from model_helper import las_model_fn
 from utils import get_ipa
 
+SAMPLE_RATE = 16000
+
+#TODO: move to parameters
+WIN_LEN = 0.02 * SAMPLE_RATE
+WIN_STEP = 0.01 * SAMPLE_RATE
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -43,6 +50,13 @@ def parse_args():
                         action='store_true')
     parser.add_argument('--convert_targets_to_ipa', help='Convert targets to ipa before comparison.',
                         action='store_true')
+    parser.add_argument('--calc_frame_binf_accuracy', help='Calculate binary features accuracy on frame leve. For TIMIT only!',
+                        action='store_true')
+    parser.add_argument('--mapping_for_frame_accuracy', type=str,
+                        help='additional mapping when evaluating frame level accuracy. For TIMIT only!')
+    parser.add_argument('--encoder_frame_step', type=int, default=40,
+                        help='Encoder output frame step to be used for frame accuracy calculation.'
+                             'Should be used only if --use_pyramidal was specified at trainig. For TIMIT only!')
 
     return parser.parse_args()
 
@@ -77,6 +91,108 @@ def to_text(vocab_list, sample_ids):
     sym_list = [vocab_list[x] for x in sample_ids] + [utils.EOS]
     return args.delimiter.join(sym_list[:sym_list.index(utils.EOS)])
 
+def phrase_to_binfs(phrase, df_mapping):
+    binfs = np.zeros((len(phrase), len(df_mapping.index)), np.int)
+    for i, phone in enumerate(phrase):
+        binfs[i, :] = df_mapping[phone].values
+    return binfs
+
+def soft2hard_attention(attention):
+    '''
+    Convert soft attention to hard attention using DTW
+    '''
+    from fastdtw import dtw
+    _, path = dtw(list(range(attention.shape[0])), list(range(attention.shape[1])),
+        dist=lambda x, y: -attention[int(x), int(y)])
+    hard_attention = np.zeros_like(attention)
+    for i, j in path:
+        hard_attention[i, j] = 1
+    for frame in range(attention.shape[1]):
+        inds = np.argwhere(hard_attention[:, frame] == 1)
+        if inds.size <= 1:
+            continue
+        if attention[inds[0], frame] > attention[inds[-1], frame]:
+            if frame < attention.shape[1] - 1 and hard_attention[inds[-1], frame + 1] == 1:
+                hard_attention[inds[-1], frame] = 0
+        else:
+            if frame > 0 and hard_attention[inds[0], frame - 1] == 1:
+                hard_attention[inds[0], frame] = 0
+    return hard_attention
+
+def attention_to_segments(attention):
+    """
+    :param attention: Attantion matrix, the last dimension corresponds to the input sequence
+    """
+    attention = soft2hard_attention(attention)
+
+    alignment = []
+    st_frame, en_frame, st_phone, en_phone, phone = 0, 0, 0, 0, 0
+    phone2seg = np.zeros((attention.shape[0]), np.int32)
+    for frame in range(attention.shape[1]):
+        inds = np.argwhere(attention[:, frame] == 1)
+        if inds.size > 0:
+            phone = inds[-1][0]
+        if phone > en_phone and frame > 0:
+            en_phone = phone
+            en_frame = frame
+            alignment.append([st_frame, en_frame, st_phone, en_phone])
+            phone2seg[st_phone:en_phone] = len(alignment) - 1
+            st_phone = en_phone
+            st_frame = en_frame
+    alignment.append([st_frame, attention.shape[1],
+                        st_phone, attention.shape[0]])
+    phone2seg[st_phone:attention.shape[0]] = len(alignment) - 1
+    alignment = np.vstack(alignment).astype(np.float)
+
+    return alignment, phone2seg
+
+def segs_phones_to_frame_binf(alignment, phones, df_mapping):
+    nfeatures = len(df_mapping.index)
+    nframes_aligned = alignment.shape[0]
+    nframes = int(alignment[-1, 1])
+    frames_binf = np.zeros((nframes, nfeatures))
+    for aligned_frame_ind in range(nframes_aligned):
+        binfs = np.zeros((nfeatures), np.bool)
+        st_phone = int(alignment[aligned_frame_ind, 2])
+        en_phone = int(alignment[aligned_frame_ind, 3])
+        for phone_ind in range(st_phone, en_phone):
+            binfs = np.logical_or(binfs, df_mapping[phones[phone_ind]].values)
+        st = int(alignment[aligned_frame_ind, 0])
+        en = int(alignment[aligned_frame_ind, 1])
+        frames_binf[st:en, :] = binfs
+    return frames_binf
+
+def get_timit_binf_markup(sound_file, df_mapping, markup_mapping):
+    nfeatures = len(df_mapping.index)
+    phn_file =  sound_file.replace('.WAV', '.PHN')
+    with open(phn_file, 'r') as fid:
+        lines = fid.read().strip().split('\n')
+    nphones = len(lines)
+    markup = np.zeros((nphones, 2))
+    binfs = np.zeros((nphones, nfeatures), np.bool)
+    for i, line in enumerate(lines):
+        st, en, phone = line.split()
+        phone = markup_mapping[phone]
+        if phone is None:
+            phone = 'sil'
+        markup[i, :] = [int(st), int(en)]
+        binfs[i, :] = df_mapping[phone].values
+    markup = markup / SAMPLE_RATE
+    wav, _ = librosa.load(sound_file, SAMPLE_RATE)
+    nsamples = len(wav)
+    return markup, binfs, nsamples
+
+def get_binf_markup_frames(markup, binfs, win_len, win_step):
+    markup_frames = librosa.time_to_frames(markup, SAMPLE_RATE, win_step, win_len)
+    nframes = markup_frames[-1, -1]
+    nfeatures = binfs.shape[1]
+    frames_binf = np.zeros((nframes, nfeatures), np.bool)
+    for frame, binf in zip(markup_frames, binfs):
+        frames_binf[frame[0]:frame[1]] = np.logical_or(frames_binf[frame[0]:frame[1]], binf)
+    return frames_binf
+
+def count_correct(binf_pred, binf_tgt):
+    return np.sum(np.equal(binf_pred, binf_tgt), axis=0)
 
 def main(args):
     config = tf.estimator.RunConfig(model_dir=args.model_dir)
@@ -113,7 +229,19 @@ def main(args):
         input_fn=lambda: input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
             take=args.take, binf2phone=None),
-        predict_keys=[phone_pred_key, 'embedding'])
+        predict_keys=[phone_pred_key, 'embedding', 'alignment'])
+
+    if args.calc_frame_binf_accuracy:
+        with open(args.mapping_for_frame_accuracy, 'r') as fid:
+            mapping_lines = fid.read().strip().split()
+        mapping_targets = dict()
+        for line in mapping_lines:
+            phones = line.split('\t')
+            if len(phones) < 3:
+                mapping_targets[phones[0]] = None
+            else:
+                mapping_targets[phones[0]] = phones[-1]
+
 
     predictions = list(predictions)
     if args.plain_targets:
@@ -123,7 +251,7 @@ def main(args):
             if '\t' in line:
                 delim = '\t'
             cells = line.split(delim)
-            _, lang, phrase = cells[:3]
+            sound, lang, phrase = cells[:3]
             if args.convert_targets_to_ipa:
                 if len(cells) == 4:
                     phrase = cells[-1].split(',')
@@ -132,10 +260,16 @@ def main(args):
             else:
                 phrase = phrase.split()
                 phrase = [x.strip().lower() for x in phrase]
-            targets.append(phrase)
+            if args.calc_frame_binf_accuracy:
+                markup, binfs, nsamples = get_timit_binf_markup(sound, binf2phone, mapping_targets)
+                targets.append((phrase, markup, binfs, nsamples))
+            else:
+                targets.append(phrase)
         err = 0
         tot = 0
-        for p, t in tqdm(zip(predictions, targets)):
+        frames_count = 0
+        correct_frames_count = np.zeros((len(binf2phone.index)))
+        for p, target in tqdm(zip(predictions, targets)):
             beams = p[phone_pred_key].T
             if len(beams.shape) > 1:
                 i = beams[0]
@@ -143,6 +277,7 @@ def main(args):
                 i = beams
             i = i.tolist() + [utils.EOS_ID]
             i = i[:i.index(utils.EOS_ID)]
+            t = target[0] if args.calc_frame_binf_accuracy else target
             if mapping is not None:
                 target_ids = np.array([vocab_list_orig.index(p) for p in t])
                 target_ids = np.array(mapping)[target_ids]
@@ -151,7 +286,34 @@ def main(args):
             text = text.split(args.delimiter)
             err += edist(text, t)
             tot += len(t)
+
+            if args.calc_frame_binf_accuracy:
+                markup, binfs, nsamples = target[1:]
+                markup = np.minimum(markup, nsamples / SAMPLE_RATE)
+
+                attention = p['alignment'][:len(text), :]
+                alignment, _ = attention_to_segments(attention)
+                pred_frames_binf = segs_phones_to_frame_binf(alignment, text, binf2phone)
+
+                markup_frames_binf = get_binf_markup_frames(markup, binfs,
+                    WIN_LEN, args.encoder_frame_step * SAMPLE_RATE / 1000)
+
+                if pred_frames_binf.shape[0] != markup_frames_binf.shape[0]:
+                    print('Warining: sound {} prediction frames {} target frames {}'.format(t,
+                        pred_frames_binf.shape[0], markup_frames_binf.shape[0]))
+                    nframes_fixed = min(pred_frames_binf.shape[0], markup_frames_binf.shape[0])
+                    pred_frames_binf = pred_frames_binf[:nframes_fixed, :]
+                    markup_frames_binf = markup_frames_binf[:nframes_fixed, :]
+                correct_frames_count += count_correct(pred_frames_binf, markup_frames_binf)
+                frames_count += markup_frames_binf.shape[0]
+
+            # Compare binary feature vectors
+
         print(f'PER: {100 * err / tot:2.2f}%')
+
+        if args.calc_frame_binf_accuracy:
+            df = pd.DataFrame({'correct': correct_frames_count / frames_count}, index=binf2phone.index)
+            print(df)
 
     if args.beam_width > 0:
         predictions = [{
