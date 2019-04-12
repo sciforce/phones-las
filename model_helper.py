@@ -142,6 +142,18 @@ def compute_emb_loss(encoder_state, reader_encoder_state):
             emb_loss += tf.losses.mean_squared_error(enc_s.h, enc_r[-1].h)
     return emb_loss
 
+def get_alignment_history(final_context_state, params):
+    try:
+        res = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])
+    except AttributeError:
+        if not isinstance(final_context_state.cell_state, tuple):
+            alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
+        else:
+            alignment_history = tf.transpose(final_context_state.cell_state[-1].alignment_history, perm=[1, 0, 2])
+        shape = tf.shape(alignment_history)
+        res = tf.reshape(alignment_history,
+            [-1, params.decoder.beam_width, shape[1], shape[2]])
+    return res
 
 def las_model_fn(features,
                  labels,
@@ -246,14 +258,16 @@ def las_model_fn(features,
             logits = tf.no_op()
             sample_ids_phones = decoder_outputs.predicted_ids
             if decoder_outputs_binf is not None:
-                sample_ids_phones_binf = decoder_outputs.predicted_ids
+                sample_ids_phones_binf = decoder_outputs_binf.predicted_ids
         else:
             logits = decoder_outputs.rnn_output
             sample_ids_phones = tf.to_int32(tf.argmax(logits, -1))
             if decoder_outputs_binf is not None:
                 logits_binf = decoder_outputs_binf.rnn_output
-                if is_binf_outputs:
+                if params.decoder.binary_outputs and params.decoder.binf_sampling:
                     sample_ids_binf = tf.to_int32(tf.round(tf.sigmoid(logits_binf)))
+                    logits_phones_binf = transform_binf_to_phones(logits_binf, binf_embedding)
+                    sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_phones_binf, -1))
                 else:
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_binf, -1))
 
@@ -272,19 +286,13 @@ def las_model_fn(features,
         if sample_ids_phones_binf is not None:
             predictions['sample_ids_phones_binf'] = sample_ids_phones_binf
 
-        try:
-            predictions['alignment'] = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])
-        except AttributeError:
-            if not isinstance(final_context_state.cell_state, tuple):
-                alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
-            else:
-                alignment_history = tf.transpose(final_context_state.cell_state[-1].alignment_history, perm=[1, 0, 2])
-            shape = tf.shape(alignment_history)
-            predictions['alignment'] = tf.reshape(alignment_history,
-                [-1, params.decoder.beam_width, shape[1], shape[2]])
+        predictions['alignment'] = get_alignment_history(final_context_state, params)
+        if final_context_state_binf is not None:
+            predictions['alignment_binf'] = get_alignment_history(final_context_state_binf, params)
+
         if params.decoder.beam_width == 0:
             if params.decoder.binary_outputs and binf_embedding is None:
-                predictions['probs'] = tf.nn.sigmoid(logits)
+                predictions['probs'] = tf.nn.sigmoid(logits_binf)
             else:
                 predictions['probs'] = tf.nn.softmax(logits)
 

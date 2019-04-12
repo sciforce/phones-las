@@ -2,6 +2,7 @@ import os
 from argparse import ArgumentParser
 from tqdm import tqdm
 import random
+import tgt
 
 parser = ArgumentParser()
 parser.add_argument('--arctic_path', help='Path to L2 Arctic corpus.', type=str, required=True)
@@ -13,6 +14,8 @@ parser.add_argument('--test_speaker', help='Speaker used for testing.'
 parser.add_argument('--output_dir', help='Path to output directory.', required=True, type=str)
 parser.add_argument('--random_seed', help='Random seed for splitting train, test, validation sets.',
                     type=int, default=None)
+parser.add_argument('--labels_type', help='What type of labels to use.', type=str,
+                    default='text', choices=['text', 'arpabet'])
 
 args = parser.parse_args()
 
@@ -36,9 +39,15 @@ for speaker in tqdm(speakers, desc='Collecting speakers'):
     for f in tqdm(filter(lambda x: x.endswith('.wav'), files),
         desc='Processing speaker {}'.format(speaker)):
         wav_path = os.path.join(speaker_dir, 'wav', f)
-        markup_path = os.path.join(speaker_dir, 'transcript', f.replace('.wav', '.txt'))
-        with open(markup_path, 'r') as fid:
-            markup_text = fid.read().strip(' \n').replace(',', '')
+        if args.labels_type == 'text':
+            markup_path = os.path.join(speaker_dir, 'transcript', f.replace('.wav', '.txt'))
+            with open(markup_path, 'r') as fid:
+                markup_text = fid.read().strip(' \n').replace(',', '')
+        elif args.labels_type == 'arpabet':
+            markup_path = os.path.join(speaker_dir, 'textgrid', f.replace('.wav', '.TextGrid'))
+            textgrid = tgt.io.read_textgrid(markup_path)
+            tier = textgrid.get_tier_by_name('phones')
+            markup_text = ' '.join(phone.text.lower() for phone in tier.annotations)
         write_text = '{},{},{}\n'.format(wav_path, 'en', markup_text)
         if speaker == test_speaker:
             output_test.write(write_text)
