@@ -24,8 +24,7 @@ session = tf.Session()
 tfrecord_mutex = Lock()
 stats_mutex = Lock()
 binf2phone = None
-lyon_calc = None
-
+lyon_calc = LyonCalc()
 
 def make_example(input, label):
     if isinstance(label, list):
@@ -189,8 +188,6 @@ if __name__ == "__main__":
 
     if args.targets in ('phones', 'binary_features'):
         binf2phone = load_binf2phone(args.binf_map)
-    if args.feature_type == 'lyon':
-        lyon_calc = LyonCalc()
     if args.feature_type == 'lyon' or args.backend == 'speechpy':
         print('Forcing n_jobs = 1 for selected configuration.')
         args.n_jobs = 1
