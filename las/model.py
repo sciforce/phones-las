@@ -114,23 +114,29 @@ def listener(encoder_inputs,
                 cell = lstm_cell(hparams.num_units, hparams.dropout, mode)
 
             forward_cell_list.append(cell)
+            if not hparams.unidirectional:
+                with tf.variable_scope('bw_cell_{}'.format(layer)):
+                    cell = lstm_cell(hparams.num_units, hparams.dropout, mode)
 
-            with tf.variable_scope('bw_cell_{}'.format(layer)):
-                cell = lstm_cell(hparams.num_units, hparams.dropout, mode)
-
-            backward_cell_list.append(cell)
+                backward_cell_list.append(cell)
 
         forward_cell = tf.nn.rnn_cell.MultiRNNCell(forward_cell_list)
-        backward_cell = tf.nn.rnn_cell.MultiRNNCell(backward_cell_list)
 
-        encoder_outputs, encoder_state = tf.nn.bidirectional_dynamic_rnn(
-            forward_cell,
-            backward_cell,
-            encoder_inputs,
-            sequence_length=source_sequence_length,
-            dtype=tf.float32)
-
-        encoder_outputs = tf.concat(encoder_outputs, -1)
+        if not hparams.unidirectional:
+            backward_cell = tf.nn.rnn_cell.MultiRNNCell(backward_cell_list)
+            encoder_outputs, encoder_state = tf.nn.bidirectional_dynamic_rnn(
+                forward_cell,
+                backward_cell,
+                encoder_inputs,
+                sequence_length=source_sequence_length,
+                dtype=tf.float32)
+            encoder_outputs = tf.concat(encoder_outputs, -1)
+        else:
+            encoder_outputs, encoder_state = tf.nn.dynamic_rnn(
+                forward_cell,
+                encoder_inputs,
+                sequence_length=source_sequence_length,
+                dtype=tf.float32)
 
         return (encoder_outputs, source_sequence_length), encoder_state
 

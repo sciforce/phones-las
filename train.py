@@ -34,6 +34,8 @@ def parse_args():
                         help='rnn layers of encoder')
     parser.add_argument('--use_pyramidal', action='store_true',
                         help='whether to use pyramidal rnn')
+    parser.add_argument('--unidirectional', action='store_true',
+                        help='Use unidirectional RNN')
 
     parser.add_argument('--decoder_units', type=int, default=128,
                         help='rnn hidden units of decoder')
