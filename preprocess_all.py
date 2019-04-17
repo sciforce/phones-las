@@ -74,14 +74,16 @@ def calculate_acoustic_features(args, waveform):
             log_cut = 1e-8
             spec, energy = mfe(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
                 frame_stride=args.step*1e-3, num_filters=args.n_mels, fft_length=n_fft)
-            acoustic_features = np.hstack((spec, energy[:, np.newaxis]))
+            if args.energy:
+                acoustic_features = np.hstack((spec, energy[:, np.newaxis]))
             acoustic_features = np.log(acoustic_features + log_cut)
         else:
             spec = librosa.feature.melspectrogram(y=waveform, sr=SAMPLE_RATE, n_fft=n_fft, 
                 hop_length=hop_length, n_mels=args.n_mels)
-            logspec = librosa.core.amplitude_to_db(spec).transpose()
-            energy = librosa.feature.rmse(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
-            acoustic_features = np.hstack((logspec, energy))
+            acoustic_features = librosa.core.amplitude_to_db(spec).transpose()
+            if args.energy:
+                energy = librosa.feature.rmse(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
+                acoustic_features = np.hstack((acoustic_features, energy))
     elif 'mfcc' == args.feature_type:
         if args.backend=='speechpy':
             acoustic_features = mfcc(waveform, SAMPLE_RATE, frame_length=args.window*1e-3,
@@ -90,8 +92,9 @@ def calculate_acoustic_features(args, waveform):
         else:
             acoustic_features = librosa.feature.mfcc(y=waveform, sr=SAMPLE_RATE, n_mfcc=args.n_mfcc,
                 n_fft=n_fft, hop_length=hop_length, n_mels=args.n_mels).transpose()
-            energy = librosa.feature.rmse(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
-            acoustic_features = np.hstack((acoustic_features, energy))
+            if args.energy:
+                energy = librosa.feature.rmse(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
+                acoustic_features = np.hstack((acoustic_features, energy))
     elif 'lyon' == args.feature_type:
         waveform /= np.abs(waveform).max()
         acoustic_features = lyon_calc.lyon_passive_ear(waveform[:, np.newaxis].astype(np.double),
@@ -100,14 +103,15 @@ def calculate_acoustic_features(args, waveform):
         if max_val > 0:
             acoustic_features /= max_val
         acoustic_features = acoustic_features.astype(np.float32)
-        energy = librosa.feature.rmse(y=waveform, frame_length=hop_length, hop_length=hop_length).transpose()
-        energy /= energy.max()
-        len_delta = acoustic_features.shape[0] - energy.shape[0]
-        if len_delta > 0:
-            energy = np.pad(energy, [(0, len_delta), (0, 0)], 'edge')
-        else:
-            energy = energy[:acoustic_features.shape[0], :]
-        acoustic_features = np.hstack((acoustic_features, energy))
+        if args.energy:
+            energy = librosa.feature.rmse(y=waveform, frame_length=hop_length, hop_length=hop_length).transpose()
+            energy /= energy.max()
+            len_delta = acoustic_features.shape[0] - energy.shape[0]
+            if len_delta > 0:
+                energy = np.pad(energy, [(0, len_delta), (0, 0)], 'edge')
+            else:
+                energy = energy[:acoustic_features.shape[0], :]
+            acoustic_features = np.hstack((acoustic_features, energy))
     else:
         raise ValueError('Unexpected features type.')
     if args.deltas:
@@ -192,6 +196,7 @@ if __name__ == "__main__":
                         choices=['speechpy', 'librosa'], default='librosa')
     parser.add_argument('--n_mfcc', help='Number of MFCC coeffs.', type=int, default=13)
     parser.add_argument('--n_mels', help='Number of mel-filters.', type=int, default=40)
+    parser.add_argument('--energy', help='Compute energy.', action='store_true')
     parser.add_argument('--window', help='Analysis window length in ms.', type=int, default=20)
     parser.add_argument('--step', help='Analysis window step in ms.', type=int, default=10)
     parser.add_argument('--deltas', help='Calculate deltas and double-deltas.', action='store_true')
