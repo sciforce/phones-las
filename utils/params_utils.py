@@ -47,6 +47,7 @@ def get_default_hparams():
         decoder_layers=2,
         decoder_units=128,
         target_vocab_size=0,
+        binf_count=0,
         embedding_size=0,
         sampling_probability=0.1,
         sos_id=1,
@@ -58,13 +59,14 @@ def get_default_hparams():
         attention_layer_size=None,
         beam_width=0,
         binary_outputs=False,
+        binf_sampling=False,
         # evaluation setting
         mapping=None)
 
     return hparams
 
 
-def create_hparams(args, target_vocab_size=None, sos_id=1, eos_id=2):
+def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_id=2):
     hparams = get_default_hparams()
     hparams_file = os.path.join(args.model_dir, 'hparams.json')
 
@@ -84,7 +86,8 @@ def create_hparams(args, target_vocab_size=None, sos_id=1, eos_id=2):
             raise ValueError('Target vocabulary size is not specified.')
         hparams_dict = {
             **vars(args),
-            **{'sos_id': sos_id, 'eos_id': eos_id, 'target_vocab_size': target_vocab_size},
+            **{'sos_id': sos_id, 'eos_id': eos_id, 'target_vocab_size': target_vocab_size,
+               'binf_count': binf_count},
         }
 
     for name, value in hparams.values().items():
@@ -116,6 +119,7 @@ def get_encoder_decoder_hparams(hparams):
     text_loss = hparams.pop_hparam('text_loss')
     use_text = hparams.pop_hparam('use_text')
     binary_outputs = hparams.pop_hparam('binary_outputs')
+    binf_sampling = hparams.pop_hparam('binf_sampling')
 
     encoder_hparams = HParams(
         num_layers=hparams.pop_hparam('encoder_layers'),
@@ -128,7 +132,8 @@ def get_encoder_decoder_hparams(hparams):
         num_layers=hparams.pop_hparam('decoder_layers'),
         num_units=hparams.pop_hparam('decoder_units'),
         dropout=dropout,
-        binary_outputs=binary_outputs)
+        binary_outputs=binary_outputs,
+        binf_sampling=binf_sampling)
 
     for name, value in hparams.values().items():
         decoder_hparams.add_hparam(name, value)

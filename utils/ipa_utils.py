@@ -10,7 +10,8 @@ __all__ = [
     'IPAError',
     'get_ipa',
     'load_binf2phone',
-    'ipa2binf'
+    'ipa2binf',
+    'get_mapping'
 ]
 
 engine = ESpeakNG()
@@ -20,7 +21,7 @@ class IPAError(ValueError):
 
 DIACRITICS_LIST = r'̆|\.|\||‖|↗|↘|\d|-'
 STRESS_DIACRITICS = r'ˈ|ˌ'
-GEMINATION_DIACRITICS = r'ː|ˑ'
+GEMINATION_DIACRITICS = r'ː|ˑ|:'
 
 SEP = ','
 
@@ -63,11 +64,12 @@ def _postprocessing(ipa, language, remove_all_diacritics=False,
         # presence of character names instead of phonemes.
         # Such transcription is useless.
         raise IPAError(ipa)
+    diacritics = DIACRITICS_LIST
     if remove_all_diacritics:
         # remove diacritics
-        ipa = ''.join(x for x in ipa if x.isalnum())
-    else:
-        ipa = re.sub(DIACRITICS_LIST, '', ipa)
+        # ipa = ''.join(x for x in ipa if x.isalnum())
+        diacritics = r'|'.join((DIACRITICS_LIST, STRESS_DIACRITICS))
+    ipa = re.sub(diacritics, '', ipa)
     ipa = re.sub(r'([\r\n])', ' ', ipa)
     # split by phonenes, keeping spaces
     ipa = [p for word in ipa.split(' ') for p in itertools.chain(word.split('_'), ' ') if p != '']
@@ -116,6 +118,16 @@ def _postprocess_by_languages(text, language, split_all_diphthongs):
     if 'en' in language:
         text = re.sub('əl', 'l', text)
         text = re.sub('(\w+)ɹ', r'\1˞', text)
+    if language == 'tn':
+        text = re.sub('K', 'ɬ', text)
+    if language == 'ky':
+        # Replace SAMPA characters with IPA ones
+        text = re.sub('S', 'ʃ', text)
+        text = re.sub('Z', 'ʒ', text)
+        text = re.sub('oe', 'œ', text)
+        text = re.sub('\[', '', text)
+        text = re.sub('N', 'ŋ', text)
+        text = re.sub('X', 'χ', text)
     if language == 'de':
         text = re.sub('pf', 'p̪f', text)
     if language == 'la':
@@ -221,12 +233,31 @@ def get_ipa(text, language, remove_all_diacritics=False,
     return _postprocessing(ipa, engine.voice, remove_all_diacritics,
         split_all_diphthongs)
 
+def get_mapping(mapping_path, vocab_path):
+    with open(mapping_path, 'r') as fid:
+        mapping_lines = fid.read().strip().replace('sil', 'h#').split('\n')
+    with open(vocab_path, 'r') as fid:
+        vocab = fid.read().strip().split('\n')
+    mapping = dict()
+    new_vocab = set()
+    for line in mapping_lines:
+        phones = line.split('\t')
+        if len(phones) < 3:
+            mapping[phones[0]] = None
+        else:
+            mapping[phones[0]] = phones[-1]
+            new_vocab.update([phones[-1]])
+    new_vocab = [UNK, SOS, EOS] + sorted(new_vocab)
+    int_mapping = [0, 1, 2]
+    for phone in vocab:
+        if mapping[phone] is not None:
+            int_mapping.append(new_vocab.index(mapping[phone]))
+        else:
+            int_mapping.append(-1)
+    return new_vocab, int_mapping
+
 def load_binf2phone(filename, vocab_list=None):
     binf2phone = pd.read_csv(filename, index_col=0)
-    if vocab_list is not None:
-        # Leave only phonemes from the vocabluary
-        new_cols = [col for col in binf2phone.columns if col in vocab_list]
-        binf2phone = binf2phone[new_cols]
     binf2phone.insert(UNK_ID, UNK, 1)
     binf2phone.insert(SOS_ID, SOS, 0)
     binf2phone.insert(EOS_ID, EOS, 0)
@@ -237,6 +268,9 @@ def load_binf2phone(filename, vocab_list=None):
     binf2phone.loc[binf2phone.index==SOS, SOS] = 1
     binf2phone.loc[binf2phone.index==EOS, EOS] = 1
     binf2phone.loc[binf2phone.index.isin([SOS, EOS]), UNK] = 1
+    if vocab_list is not None:
+        # Leave only phonemes from the vocabluary
+        binf2phone = binf2phone[vocab_list]
     return binf2phone
 
 def ipa2binf(ipa, binf2phone, try_merge_diphtongs=False):

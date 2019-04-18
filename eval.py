@@ -81,7 +81,7 @@ def main(args):
     tf.logging.info('Evaluating on {}'.format(eval_name))
     model.evaluate(lambda: input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels,
-            batch_size=args.batch_size, binf2phone=binf2phone), name=eval_name)
+            batch_size=args.batch_size, binf2phone=None), name=eval_name)
 
 
 if __name__ == '__main__':

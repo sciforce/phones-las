@@ -203,6 +203,7 @@ def speller(encoder_outputs,
             target_sequence_length,
             mode,
             hparams,
+            binary_outputs=False,
             binf_embedding=None):
 
     batch_size = tf.shape(encoder_outputs)[0]
@@ -227,7 +228,7 @@ def speller(encoder_outputs,
                 dtype=tf.float32, initializer=tf_contrib.layers.xavier_initializer())
 
             return tf.nn.embedding_lookup(target_embedding, ids)
-        elif hparams.binary_outputs:
+        elif binary_outputs:
             if binf_embedding is None or mode == tf.estimator.ModeKeys.TRAIN:
                 return tf.cast(ids, tf.float32)
             else:
@@ -239,7 +240,7 @@ def speller(encoder_outputs,
         encoder_outputs, source_sequence_length, mode, hparams)
 
     projection_layer = DenseBinfDecoder(
-        hparams.target_vocab_size,
+        hparams.target_vocab_size if not binary_outputs else hparams.binf_count,
         binf_to_ipa=binf_embedding if mode != tf.estimator.ModeKeys.TRAIN else None,
         use_bias=True, name='projection_layer',
         kernel_initializer=tf.random_uniform_initializer(minval=-0.075, maxval=0.075))
@@ -263,7 +264,7 @@ def speller(encoder_outputs,
         decoder_inputs = embedding_fn(decoder_inputs)
 
         if hparams.sampling_probability > 0.0:
-            if hparams.binary_outputs:
+            if binary_outputs:
                 helper = ScheduledSigmoidHelper(decoder_inputs, target_sequence_length,
                     embedding_fn, hparams.sampling_probability, binf_to_ipa=binf_embedding)
             else:
@@ -271,7 +272,7 @@ def speller(encoder_outputs,
                     decoder_inputs, target_sequence_length,
                     embedding_fn, hparams.sampling_probability)
         else:
-            if hparams.binary_outputs:
+            if binary_outputs:
                 helper = TrainingSigmoidHelper(decoder_inputs, target_sequence_length,
                                                binf_to_ipa=binf_embedding)
             else:
@@ -292,9 +293,9 @@ def speller(encoder_outputs,
             initial_state=initial_state,
             beam_width=beam_width,
             output_layer=projection_layer)
-    elif hparams.binary_outputs and binf_embedding is None:
+    elif binary_outputs and binf_embedding is None:
         start_inputs = tf.concat(
-            (tf.zeros([batch_size, hparams.target_vocab_size - 2]),
+            (tf.zeros([batch_size, hparams.binf_count - 2]),
              tf.ones([batch_size, 1]),
              tf.zeros([batch_size, 1])),
              axis=1
@@ -302,7 +303,7 @@ def speller(encoder_outputs,
         helper = tf_contrib.seq2seq.InferenceHelper(
             sample_fn=lambda x: tf.round(tf.sigmoid(x)),
             # sample_fn=lambda x: tf.sigmoid(x),    #TODO: experiment with non-binarlized outputs
-            sample_shape=[hparams.target_vocab_size],
+            sample_shape=[hparams.binf_count],
             sample_dtype=tf.float32,
             next_inputs_fn=embedding_fn,
             start_inputs=start_inputs,

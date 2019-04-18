@@ -118,23 +118,28 @@ def main(args):
     vocab_list = utils.load_vocab(args.vocab)
     binf2phone_np = None
     binf2phone = None
-    if not args.binary_outputs:
-        vocab_size = len(vocab_list)
-    else:
+    mapping = None
+    vocab_size = len(vocab_list)
+    binf_count = None
+    if args.binary_outputs:
+        if args.mapping is not None:
+            vocab_list, mapping = utils.get_mapping(args.mapping, args.vocab)
+            args.mapping = None
         binf2phone = utils.load_binf2phone(args.binf_map, vocab_list)
-        vocab_size = len(binf2phone.index)
+        binf_count = len(binf2phone.index)
         if args.output_ipa:
             binf2phone_np = binf2phone.values
 
     config = tf.estimator.RunConfig(model_dir=args.model_dir)
     hparams = utils.create_hparams(
-        args, vocab_size, utils.SOS_ID, utils.EOS_ID)
+        args, vocab_size, binf_count, utils.SOS_ID, utils.EOS_ID)
+    if mapping is not None:
+        hparams.del_hparam('mapping')
+        hparams.add_hparam('mapping', mapping)
 
     def model_fn(features, labels,
         mode, config, params):
         binf_map = binf2phone_np
-        if tf.estimator.ModeKeys.TRAIN == mode and args.binf_sampling:
-            binf_map = None
         return las_model_fn(features, labels, mode, config, params,
             binf2phone=binf_map)
 
@@ -147,12 +152,12 @@ def main(args):
         train_spec = tf.estimator.TrainSpec(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=binf2phone))
+                num_epochs=args.num_epochs, binf2phone=None))
 
         eval_spec = tf.estimator.EvalSpec(
             input_fn=lambda: input_fn(
                 args.valid or args.train, args.vocab, args.norm, num_channels=args.num_channels,
-                batch_size=args.batch_size, binf2phone=binf2phone),
+                batch_size=args.batch_size, binf2phone=None),
             start_delay_secs=60,
             throttle_secs=args.eval_secs)
 
@@ -161,7 +166,7 @@ def main(args):
         model.train(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=binf2phone))
+                num_epochs=args.num_epochs, binf2phone=None))
 
 
 if __name__ == '__main__':
