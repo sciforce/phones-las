@@ -146,7 +146,8 @@ def get_alignment_history(final_context_state, params):
     try:
         res = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])
     except AttributeError:
-        if not isinstance(final_context_state.cell_state, tuple):
+        # if not isinstance(final_context_state.cell_state, tuple):
+        if hasattr(final_context_state.cell_state, 'alignment_history'):
             alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
         else:
             alignment_history = tf.transpose(final_context_state.cell_state[-1].alignment_history, perm=[1, 0, 2])
