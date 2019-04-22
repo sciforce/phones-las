@@ -42,6 +42,13 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
         use_labels = False
 
     if not use_labels:
+        if means is not None and stds is not None:
+            tf.logging.info('Applying normalization.')
+            means_const = tf.constant(means, dtype=tf.float32)
+            stds_const = tf.constant(stds, dtype=tf.float32)
+            dataset = dataset.map(
+                lambda inputs: (inputs - means_const) / stds_const,
+                num_parallel_calls=num_parallel_calls)
         dataset = dataset.map(lambda inputs: {
             'encoder_inputs': tf.cast(inputs, tf.float32),
             'source_sequence_length': tf.shape(inputs)[0]
@@ -53,14 +60,6 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                     'encoder_inputs': 0.0,
                     'source_sequence_length': 0,
                 })
-        if means is not None and stds is not None:
-            tf.logging.info('Applying normalization.')
-            means_const = tf.constant(means, dtype=tf.float32)
-            stds_const = tf.constant(stds, dtype=tf.float32)
-            dataset = dataset.map(
-                lambda inputs: (inputs - means_const) / stds_const,
-                num_parallel_calls=num_parallel_calls)
-
     else:
         output_buffer_size = batch_size * 1000
 

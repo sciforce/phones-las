@@ -4,7 +4,8 @@ import tensorflow.contrib as tf_contrib
 __all__ = [
     'TrainingSigmoidHelper',
     'ScheduledSigmoidHelper',
-    'DenseBinfDecoder'
+    'DenseBinfDecoder',
+    'transform_binf_to_phones'
 ]
 
 def transform_binf_to_phones(outputs, binf_to_ipa):
@@ -54,10 +55,15 @@ class ScheduledSigmoidHelper(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper
         if self.binf_to_ipa is None:
             sample_id_sampler = tf.distributions.Bernoulli(logits=outputs)
             samples = tf.cast(sample_id_sampler.sample(seed=self._seed), tf.float32)
+            # samples = tf.round(tf.sigmoid(outputs))
         else:
             # Convert binary features vector to one corresponding to the closest phoneme
             ids = tf.argmax(transform_binf_to_phones(outputs, self.binf_to_ipa), -1)
             samples = tf.nn.embedding_lookup(tf.transpose(self.binf_to_ipa), ids)
+            # logits = transform_binf_to_phones(outputs, self.binf_to_ipa)
+            # sample_id_sampler = tf.distributions.Categorical(logits=logits)
+            # ids = sample_id_sampler.sample(seed=self._seed)
+            # samples = tf.nn.embedding_lookup(tf.transpose(self.binf_to_ipa), ids)
         return tf.where(
             select_sample,
             samples,
