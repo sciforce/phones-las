@@ -1,3 +1,7 @@
+'''
+A recipe for SLR32 TTS corpus of African languages from OpenSLR.
+'''
+
 import os
 from argparse import ArgumentParser
 from tqdm import tqdm
