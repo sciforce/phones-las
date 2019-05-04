@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from tqdm import tqdm
 import random
 import tgt
+import re
 
 parser = ArgumentParser()
 parser.add_argument('--arctic_path', help='Path to L2 Arctic corpus.', type=str, required=True)
@@ -44,10 +45,33 @@ for speaker in tqdm(speakers, desc='Collecting speakers'):
             with open(markup_path, 'r') as fid:
                 markup_text = fid.read().strip(' \n').replace(',', '')
         elif args.labels_type == 'arpabet':
-            markup_path = os.path.join(speaker_dir, 'textgrid', f.replace('.wav', '.TextGrid'))
-            textgrid = tgt.io.read_textgrid(markup_path)
+            markup_path = os.path.join(speaker_dir, 'annotation', f.replace('.wav', '.TextGrid'))
+            try:
+                textgrid = tgt.io.read_textgrid(markup_path)
+            except Exception:
+                markup_path = os.path.join(speaker_dir, 'textgrid', f.replace('.wav', '.TextGrid'))
+                textgrid = tgt.io.read_textgrid(markup_path)
             tier = textgrid.get_tier_by_name('phones')
-            markup_text = ' '.join(phone.text.lower() for phone in tier.annotations)
+            phones = list()
+            parse_error = False
+            for phone in tier.annotations:
+                phone = phone.text.lower().replace(' ', '')
+                if 'spn' in phone:
+                    parse_error = True
+                    break
+                if ',' in phone:
+                    _, phone, _ = phone.split(',')
+                    if 'err' in phone:
+                        continue
+                if phone == 'sp':
+                    phone = 'sil'
+                phone = re.sub(r'[^a-zA-Z1-2]', '', phone)
+                phones.append(phone)
+            if parse_error:
+                print('Skipping sound {}'.format(f))
+                continue
+            markup_text = ' '.join(phones)
+
         write_text = '{},{},{}\n'.format(wav_path, 'en', markup_text)
         if speaker == test_speaker:
             output_test.write(write_text)

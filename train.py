@@ -58,6 +58,8 @@ def parse_args():
 
     parser.add_argument('--batch_size', type=int, default=8,
                         help='batch size')
+    parser.add_argument('--num_parallel_calls', type=int, default=32,
+                        help='Number of elements to be processed in parallel during the dataset transformation')
     parser.add_argument('--num_channels', type=int, default=39,
                         help='number of input channels')
     parser.add_argument('--num_epochs', type=int, default=150,
@@ -91,7 +93,7 @@ def parse_args():
 
 
 def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=39, batch_size=8, num_epochs=1,
-    binf2phone=None):
+    binf2phone=None, num_parallel_calls=32):
     binary_targets = binf2phone is not None
     labels_shape = [] if not binary_targets else len(binf2phone.index)
     labels_dtype = tf.string if not binary_targets else tf.float32
@@ -109,7 +111,7 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 
     dataset = utils.process_dataset(
         dataset, vocab_table, sos, eos, means, stds, batch_size, num_epochs,
-        binary_targets=binary_targets, labels_shape=labels_shape)
+        binary_targets=binary_targets, labels_shape=labels_shape, num_parallel_calls=num_parallel_calls)
 
     return dataset
 
@@ -152,12 +154,12 @@ def main(args):
         train_spec = tf.estimator.TrainSpec(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=None))
+                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls))
 
         eval_spec = tf.estimator.EvalSpec(
             input_fn=lambda: input_fn(
                 args.valid or args.train, args.vocab, args.norm, num_channels=args.num_channels,
-                batch_size=args.batch_size, binf2phone=None),
+                batch_size=args.batch_size, binf2phone=None, num_parallel_calls=args.num_parallel_calls),
             start_delay_secs=60,
             throttle_secs=args.eval_secs)
 
@@ -166,7 +168,7 @@ def main(args):
         model.train(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=None))
+                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls))
 
 
 if __name__ == '__main__':
