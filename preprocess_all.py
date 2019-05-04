@@ -208,6 +208,7 @@ if __name__ == "__main__":
                         type=str, default='misc/binf_map.csv')
     parser.add_argument('--remove_diacritics', help='Remove diacritics from phones targets',
                         action='store_true')
+    parser.add_argument('--start', help='Index of example to start from', type=int, default=0)
     parser.add_argument('--count', help='Maximal phrases count, -1 for all phrases', type=int, default=-1)
     args = parser.parse_args()
 
@@ -220,8 +221,12 @@ if __name__ == "__main__":
     window = int(SAMPLE_RATE * args.window / 1000.0)
     step = int(SAMPLE_RATE * args.step / 1000.0)
     lines = open(args.input_file, 'r').readlines()
+
+    count = len(lines) - args.start
     if args.count > 0 and args.count < len(lines):
-        lines = lines[:args.count]
+        count == args.count
+    lines = lines[args.start:count+args.start]
+
     par_handle = tqdm(unit='sound')
     with tf.io.TFRecordWriter(args.output_file) as writer:
         if args.n_jobs > 1:

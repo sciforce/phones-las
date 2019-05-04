@@ -19,3 +19,4 @@ pandas==0.23.4
 speechpy==2.4
 editdistance==0.5.2
 lyon==1.0.0
+tgt==1.4.4

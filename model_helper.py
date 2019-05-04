@@ -251,7 +251,7 @@ def las_model_fn(features,
                 encoder_outputs, encoder_state, decoder_inputs_binf,
                 source_sequence_length, target_sequence_length,
                 mode, params.decoder, True,
-                binf_embedding if not params.decoder.binf_sampling else None)
+                binf_embedding if not params.decoder.binf_sampling or params.decoder.beam_width > 0 else None)
 
     sample_ids_phones_binf, sample_ids_binf, logits_binf = None, None, None
     with tf.name_scope('prediction'):

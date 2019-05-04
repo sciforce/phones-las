@@ -47,6 +47,7 @@ def parse_args():
     parser.add_argument('--window', help='Analysis window length in ms.', type=int, default=20)
     parser.add_argument('--step', help='Analysis window step in ms.', type=int, default=10)
     parser.add_argument('--deltas', help='Calculate deltas and double-deltas.', action='store_true')
+    parser.add_argument('--energy', help='Compute energy.', action='store_true')
 
     return parser.parse_args()
 
