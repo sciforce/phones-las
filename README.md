@@ -1,4 +1,4 @@
-# listen-attend-and-spell
+# Phones recognition and articulatory features detection using LAS
 
 ## Overview
 This repository is an official implementation for Interspeech 2019 "Attention model for articulatory features detection" paper.
