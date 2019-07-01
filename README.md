@@ -1,12 +1,16 @@
 # listen-attend-and-spell
 
 ## Overview
-This repository is a fork of [WindQAQ implementation][original_implementation] of [*Listen, Attend and Spell*][las] (LAS) model.
+This repository is an official implementation for Interspeech 2019 "Attention model for articulatory features detection" paper.
+Base code is a fork of [WindQAQ implementation][original_implementation] of [*Listen, Attend and Spell*][las] (LAS) model in Tensorflow.
 
-Main differences:
-* Recipes for some common datasets: Librispeech, Common Voice, Timit.
-* Phones/words data collection switch. Usefull if you intend to train on IPA targets.
-* Features extraction using Tensorflow operations for MFCC. Can be later used to export end-to-end waveform to transcription graph.
+Our contributions:
+* Recipes for some common datasets: Librispeech, Common Voice, TIMIT, L2 artctic, SLR32 and VCTK.
+* Phones/words/characters/binary features data collection switch. Usefull if you intend to train on IPA targets.
+* Support of MFE, MFCC and Lyon's model features.
+* Decoder for phonological features.
+* Support for multitask training: phones recognition and indicators estimation. 
+* Option for joint training with text auto-encoder.
 
 ## Usage
 
@@ -128,7 +132,10 @@ If you intend to use LAS architecture and not vanilla seq2seq model,
 use `--use_pyramidal --pass_hidden_state --bottom_only` flags combination.
 
 Rerun of `train.py` would result in most of parameters restored from original run.
-Thus, if you wish to override this behaviour, delete `hparams.json` file.  
+Thus, if you wish to override this behaviour, delete `hparams.json` file.
+
+This codebased has been used to train models referenced in our paper. It also can be used to replicate results on sequence level accuracies and word error rates.
+For frame level accuracies computations we used a Jupyter Notebook that is not included in this repository.  
 
 ## References
 
@@ -137,9 +144,11 @@ Thus, if you wish to override this behaviour, delete `hparams.json` file.
 - [How to create TFRecord][sequence_example]
 - [nabu's implementation][nabu]
 - [Tensorflow official seq2seq code][nmt]
+- [ASR model evaluation toolkit][asr_eval]
 
 [original_implementation]: https://github.com/WindQAQ/listen-attend-and-spell
 [nabu]: https://github.com/vrenkens/nabu
 [nmt]: https://github.com/tensorflow/nmt
 [las]: https://arxiv.org/pdf/1508.01211.pdf
 [sequence_example]: https://github.com/tensorflow/magenta/blob/master/magenta/common/sequence_example_lib.py
+[asr_eval]: https://github.com/belambert/asr-evaluation
