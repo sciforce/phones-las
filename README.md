@@ -1,7 +1,7 @@
 # Phones recognition and articulatory features detection using LAS
 
 ## Overview
-This repository is an official implementation for Interspeech 2019 "Attention model for articulatory features detection" paper.
+This repository is an official implementation for Interspeech 2019 "Attention model for articulatory features detection" [paper][paper_arxiv].
 Base code is a fork of [WindQAQ implementation][original_implementation] of [*Listen, Attend and Spell*][las] (LAS) model in Tensorflow.
 
 Our contributions:
@@ -139,6 +139,7 @@ For frame level accuracies computations we used a Jupyter Notebook that is not i
 
 ## References
 
+- [Paper e-print][paper_arxiv]
 - [WindQAQ implementation][original_implementation]
 - [Listen, Attend and spell][las]
 - [How to create TFRecord][sequence_example]
@@ -146,6 +147,7 @@ For frame level accuracies computations we used a Jupyter Notebook that is not i
 - [Tensorflow official seq2seq code][nmt]
 - [ASR model evaluation toolkit][asr_eval]
 
+[paper_arxiv]: https://arxiv.org/pdf/1907.01914.pdf
 [original_implementation]: https://github.com/WindQAQ/listen-attend-and-spell
 [nabu]: https://github.com/vrenkens/nabu
 [nmt]: https://github.com/tensorflow/nmt
