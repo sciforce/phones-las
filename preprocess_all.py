@@ -135,7 +135,8 @@ def build_features_and_vocabulary_fn(args, inputs):
     if args.targets in ('phones', 'binary_features'):
         if language not in ['arpabet', 'ipa']:
             text = ' '.join(text)
-            text = get_ipa(text, language, remove_all_diacritics=args.remove_diacritics)
+            text = get_ipa(text, language, remove_all_diacritics=args.remove_diacritics,
+                split_all_diphthongs=args.split_diphthongs)
         if args.targets == 'binary_features':
             binf = ipa2binf(text, binf2phone, 'ipa'==language)
     elif args.targets == 'chars':
@@ -164,18 +165,22 @@ def write_tf_output(writer, inputs):
 
 
 def process_line(args, writer, line):
-    filename, language, text = line.split(',')
+    filename, language, text = line.split(args.delimiter)
     inputs = {
         'file_path': filename,
         'text': text.strip(),
         'language': language
     }
-    out = read_audio_and_text(inputs)
+    try:
+        out = read_audio_and_text(inputs)
+    except Exception as e:
+        print(f'Failed to read audio or text! Exception: {str(e)}')
+        return
     try:
         out = build_features_and_vocabulary_fn(args, out)
-    except IPAError:
-        print('Failed to convert text to IPA! Exiting...')
-        sys.exit(-1)
+    except IPAError as e:
+        print(f'Failed to convert text to IPA! Exception: {str(e)}')
+        return
     except Exception as e:
         print(f'Hopefully recoverable error: {str(e)}')
         return
@@ -206,10 +211,13 @@ if __name__ == "__main__":
                         choices=['words', 'phones', 'binary_features', 'chars'], default='words')
     parser.add_argument('--binf_map', help='Path to CSV with phonemes to binary features map',
                         type=str, default='misc/binf_map.csv')
-    parser.add_argument('--remove_diacritics', help='Remove diacritics from phones targets',
+    parser.add_argument('--remove_diacritics', help='Remove diacritics from IPA targets',
+                        action='store_true')
+    parser.add_argument('--split_diphthongs', help='Remove diacritics from IPA targets',
                         action='store_true')
     parser.add_argument('--start', help='Index of example to start from', type=int, default=0)
     parser.add_argument('--count', help='Maximal phrases count, -1 for all phrases', type=int, default=-1)
+    parser.add_argument('--delimiter', help='CSV delimiter', type=str, default=',')
     args = parser.parse_args()
 
     if args.targets in ('phones', 'binary_features'):
