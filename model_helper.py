@@ -322,7 +322,7 @@ def las_model_fn(features,
     with tf.name_scope('cross_entropy'):
         audio_loss = compute_loss(
             logits, targets, final_sequence_length, target_sequence_length, mode)
-    if is_binf_outputs:
+    if params.decoder.binary_outputs and mode == tf.estimator.ModeKeys.TRAIN:
         with tf.name_scope('cross_entropy_binf'):
             audio_loss_binf = compute_loss_sigmoid(logits_binf, targets_binf,
                 final_sequence_length, target_sequence_length, mode)

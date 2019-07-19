@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from utils.espeakng import ESpeakNG
 import re
 import itertools
@@ -21,6 +22,7 @@ class IPAError(ValueError):
 
 DIACRITICS_LIST = r'̆|\.|\||‖|↗|↘|\d|-'
 STRESS_DIACRITICS = r'ˈ|ˌ'
+SEMI_STRESS = r'ˌ'
 GEMINATION_DIACRITICS = r'ː|ˑ|:'
 
 SEP = ','
@@ -53,10 +55,13 @@ def _preprocessing(text, language):
     text = re.sub(r'([^\w\s])', '', text)
     return text
 
-def _postprocessing(ipa, language, remove_all_diacritics=False,
-    split_all_diphthongs=False):
+def _postprocessing(ipa, language, remove_all_stress=False,
+    remove_semi_stress=False,
+    split_all_diphthongs=False,
+    split_stress_gemination=False,
+    remove_lang_markers=False):
     lang_markers_pattern = r'(\([^)]+\))'
-    if language != 'ja':
+    if language != 'ja' and remove_lang_markers:
         # remove language switch markers
         ipa = re.sub(lang_markers_pattern, '', ipa)
     elif re.search(lang_markers_pattern,ipa) is not None:
@@ -65,10 +70,12 @@ def _postprocessing(ipa, language, remove_all_diacritics=False,
         # Such transcription is useless.
         raise IPAError(ipa)
     diacritics = DIACRITICS_LIST
-    if remove_all_diacritics:
+    if remove_all_stress:
         # remove diacritics
         # ipa = ''.join(x for x in ipa if x.isalnum())
         diacritics = r'|'.join((DIACRITICS_LIST, STRESS_DIACRITICS))
+    elif remove_semi_stress:
+        diacritics = r'|'.join((DIACRITICS_LIST, SEMI_STRESS))
     ipa = re.sub(diacritics, '', ipa)
     ipa = re.sub(r'([\r\n])', ' ', ipa)
     # split by phonenes, keeping spaces
@@ -76,7 +83,25 @@ def _postprocessing(ipa, language, remove_all_diacritics=False,
     ipa = ipa[:-1]
     ipa = _postprocess_double_consonants(ipa)
     ipa = _postprocess_double_vowels(ipa)
-    return _postprocess_by_languages(ipa, language, split_all_diphthongs)
+    ipa = _postprocess_by_languages(ipa, language, split_all_diphthongs)
+    if split_stress_gemination:
+        ipa = _split_stress_gemination(ipa)
+    return ipa
+
+def _split_stress_gemination(ipa):
+    out = []
+    for phone in ipa:
+        if phone[0] in STRESS_DIACRITICS.split('|') and len(phone) > 1:
+            out.append(phone[0])
+            phone = phone[1:]
+        gemination = None
+        if phone[-1] in GEMINATION_DIACRITICS.split('|') and len(phone) > 1:
+            gemination = phone[-1]
+            phone = phone[:-1]
+        out.append(phone)
+        if gemination is not None:
+            out.append(gemination)
+    return out
 
 def _postprocess_double_consonants(text):
     out_text = []
@@ -113,10 +138,13 @@ def _process_diphthongs(text, split_all_diphthongs=False):
 def _postprocess_by_languages(text, language, split_all_diphthongs):
     text = SEP.join(text)
     text = re.sub(r'(\w+ː)ː', r'\1', text)
+    if 'lt' in language:
+        text = re.sub('ʲʲ', 'ʲ', text)
     if 'vi' in language:
         text = re.sub('kh', 'k̚ʷ', text)
     if 'en' in language:
         text = re.sub('əl', 'l', text)
+        text = re.sub('(\w+)(ː)ɹ', r'\1˞\2', text)
         text = re.sub('(\w+)ɹ', r'\1˞', text)
     if language == 'tn':
         text = re.sub('K', 'ɬ', text)
@@ -165,6 +193,15 @@ def _postprocess_by_languages(text, language, split_all_diphthongs):
         text = re.sub('^ʲ{sep}'.format(sep=SEP), '', text)
     if language == 'ko':
         text = re.sub(r'(\w)h', r'\1ʰ', text)
+        text = re.sub('npʰ', 'n{sep}pʰ'.format(sep=SEP), text)
+        text = re.sub('ɫd', 'ɫ{sep}d'.format(sep=SEP), text)
+        text = re.sub('nd', 'n{sep}d'.format(sep=SEP), text)
+        text = re.sub('nˈʌ', 'n{sep}ˈ{sep}ʌ'.format(sep=SEP), text)
+        text = re.sub('ɐɡ', 'ɐ{sep}ɡ'.format(sep=SEP), text)
+        text = re.sub('ns', 'n{sep}s'.format(sep=SEP), text)
+        text = re.sub('etɕ', 'e{sep}tɕ'.format(sep=SEP), text)
+        text = re.sub('oj', 'o{sep}j'.format(sep=SEP), text)
+        text = re.sub('oʰ', 'o', text)
     if language == 'ja':
         # Delete short u (‘ɯ’) between voiceless consonants or at the end of the word.
         sub_reg_template = ('((?:m̥|n̥|ɳ̊|ɲ̊|ŋ̊|p|p̪|t̪|t|ʈ|c|k|'
@@ -212,11 +249,13 @@ def _postprocess_by_languages(text, language, split_all_diphthongs):
 
     # Remove standalone sterss (occurs in Welsh, Latin)
     text = list(filter(lambda x: x != 'ˈ', text))
+    # Catch "envelop" strange phonemes
+    if any(map(lambda x: 'envelop' in x, text)):
+        raise IPAError(text)
 
     return text
 
-def get_ipa(text, language, remove_all_diacritics=False,
-    split_all_diphthongs=False):
+def get_ipa(text, language, **kwargs):
     engine.voice = language
     text = _preprocessing(text, engine.voice)
     # get ipa with '_' as phonemes separator
@@ -225,13 +264,18 @@ def get_ipa(text, language, remove_all_diacritics=False,
         process_by_words = True
     if not process_by_words:
         ipa = engine.g2p(text, ipa=1)
+        ipa = '\n'.join(filter(lambda x: not x.startswith('espeak:'), ipa.split('\n')))
     else:
         text = text.split(' ')
         ipa = ' '.join(engine.g2p(word, ipa=1) for word in text)
     if ipa.startswith('Error:'):
         raise IPAError(ipa)
-    return _postprocessing(ipa, engine.voice, remove_all_diacritics,
-        split_all_diphthongs)
+    symbols = r'[]{}@/'
+    if any((c in ipa) for c in symbols):
+        raise IPAError(ipa)
+    if not ipa:
+        raise IPAError('IPA is empty')
+    return _postprocessing(ipa, engine.voice, **kwargs)
 
 def get_mapping(mapping_path, vocab_path):
     with open(mapping_path, 'r') as fid:
