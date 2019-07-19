@@ -1,6 +1,5 @@
 import argparse
 import tensorflow as tf
-import pandas as pd
 
 import utils
 
@@ -74,10 +73,6 @@ def parse_args():
                         help='How often (in steps) to add Gaussian noise to the weights, zero for disabling noise addition.')
     parser.add_argument('--noise_std', type=float, default=0.1,
                         help='Weigth noise standard deviation.')
-    parser.add_argument('--use_text', action='store_true', help='use textual information for encoder regularization')
-    parser.add_argument('--emb_loss', action='store_true',
-                        help='audio encoder regularization using text encoder')
-    parser.add_argument('--text_loss', action='store_true', help='train text encoder')
     parser.add_argument('--binary_outputs', action='store_true',
                         help='make projection layer output binary feature posteriors instead of phone posteriors')
     parser.add_argument('--output_ipa', action='store_true',
