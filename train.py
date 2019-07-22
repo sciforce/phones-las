@@ -88,6 +88,10 @@ def parse_args():
     parser.add_argument('--reset', help='Reset HParams.', action='store_true')
     parser.add_argument('--binf_sampling', action='store_true',
                         help='with --output_ipa, do not use ipa sampling algorithm for trainin, only for validation')
+    parser.add_argument('--binf_projection', action='store_true',
+                        help='with --binary_outputs and --output_ipa, use binary features mapping instead of decoder''s projection layer.')
+    parser.add_argument('--multitask', action='store_true',
+                        help='with --binary_outputs use both binary features and IPA decoders.')
 
     return parser.parse_args()
 
