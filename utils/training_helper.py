@@ -76,12 +76,16 @@ class DenseBinfDecoder(tf.layers.Dense):
     original layer's outputs, assumed to be binary features logits,
     to phonemes logits.
     '''
-    def __init__(self, units, binf_to_ipa=None, **kwargs):
+    def __init__(self, units, binf_to_ipa=None, inner_projection_layer=True, **kwargs):
         self.binf_to_ipa = binf_to_ipa
+        self.inner_projection_layer = inner_projection_layer
         super().__init__(units, **kwargs)
 
     def call(self, inputs):
-        outputs = super().call(inputs)
+        if self.inner_projection_layer:
+            outputs = super().call(inputs)
+        else:
+            outputs = inputs
         if self.binf_to_ipa is not None:
             outputs = transform_binf_to_phones(outputs, self.binf_to_ipa)
         return outputs
