@@ -318,7 +318,7 @@ def las_model_fn(features,
             edit_distance_binf = utils.edit_distance(
                 sample_ids_phones_binf, targets, utils.EOS_ID, params.mapping if mapping is None else None)
         metrics = {
-            'edit_distance': tf.metrics.mean(edit_distance or edit_distance_binf),
+            'edit_distance': tf.metrics.mean(edit_distance if edit_distance is not None else edit_distance_binf),
         }
 
     if params.use_text and not params.emb_loss:
@@ -330,9 +330,9 @@ def las_model_fn(features,
         if mode != tf.estimator.ModeKeys.TRAIN:
             tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
         else:
-            tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance or edit_distance_binf))
+            tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf))
 
-    audio_loss_ipa = None
+    audio_loss_ipa, audio_loss_binf = None, None
     if logits is not None:
         with tf.name_scope('cross_entropy'):
             audio_loss_ipa = compute_loss(
@@ -466,7 +466,7 @@ def las_model_fn(features,
             train_log_data['emb_loss'] = tf.reduce_mean(emb_loss)
         train_log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
     else:
-        train_log_data['edit_distance'] = tf.reduce_mean(edit_distance or edit_distance_binf)
+        train_log_data['edit_distance'] = tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf)
     logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
 
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
