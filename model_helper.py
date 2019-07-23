@@ -384,9 +384,9 @@ def las_model_fn(features,
             hooks = [eval_summary_hook]
             loss = audio_loss
         log_data = {
-            'edit_distance': tf.reduce_mean(edit_distance or edit_distance_binf),
-            'max_edit_distance': tf.reduce_max(edit_distance or edit_distance_binf),
-            'min_edit_distance': tf.reduce_min(edit_distance or edit_distance_binf)
+            'edit_distance': tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf),
+            'max_edit_distance': tf.reduce_max(edit_distance if edit_distance is not None else edit_distance_binf),
+            'min_edit_distance': tf.reduce_min(edit_distance if edit_distance is not None else edit_distance_binf)
         }
         if params.use_text:
             if not params.emb_loss:
