@@ -34,6 +34,7 @@ def get_default_hparams():
         add_noise=0,
         noise_std=0.1,
         ctc_weight=-1.,
+        tpu_name='',
 
         # encoder setting
         encoder_layers=3,
@@ -111,6 +112,7 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
 def get_encoder_decoder_hparams(hparams):
     learning_rate = hparams.pop_hparam('learning_rate')
     ctc_weight = hparams.pop_hparam('ctc_weight')
+    tpu_name = hparams.pop_hparam('tpu_name')
     dropout = hparams.pop_hparam('dropout')
     l2_reg_scale = hparams.pop_hparam('l2_reg_scale')
     add_noise = hparams.pop_hparam('add_noise')
@@ -147,5 +149,6 @@ def get_encoder_decoder_hparams(hparams):
         add_noise=add_noise,
         noise_std=noise_std,
         ctc_weight=ctc_weight,
+        tpu_name=tpu_name,
         encoder=encoder_hparams,
         decoder=decoder_hparams)

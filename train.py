@@ -89,6 +89,7 @@ def parse_args():
                         help='with --binary_outputs and --output_ipa, use binary features mapping instead of decoder''s projection layer.')
     parser.add_argument('--multitask', action='store_true',
                         help='with --binary_outputs use both binary features and IPA decoders.')
+    parser.add_argument('--tpu_name', type=str, default='', help='TPU name. Leave blank to prevent TPU training.')
 
     return parser.parse_args()
 
@@ -132,7 +133,20 @@ def main(args):
         if args.output_ipa:
             binf2phone_np = binf2phone.values
 
-    config = tf.estimator.RunConfig(model_dir=args.model_dir)
+    if args.tpu_name:
+        iterations_per_loop = 100
+        tpu_cluster_resolver = None
+        if args.tpu_name != 'fake':
+            tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(args.tpu_name)
+        config = tf.estimator.tpu.RunConfig(
+            cluster=tpu_cluster_resolver,
+            model_dir=args.model_dir,
+            save_checkpoints_steps=max(600, iterations_per_loop),
+            tpu_config=tf.estimator.tpu.TPUConfig(
+                iterations_per_loop=iterations_per_loop,
+                per_host_input_for_training=tf.estimator.tpu.InputPipelineConfig.PER_HOST_V2))
+    else:
+        config = tf.estimator.RunConfig(model_dir=args.model_dir)
     hparams = utils.create_hparams(
         args, vocab_size, binf_count, utils.SOS_ID, utils.EOS_ID)
     if mapping is not None:
@@ -145,21 +159,29 @@ def main(args):
         return las_model_fn(features, labels, mode, config, params,
             binf2phone=binf_map)
 
-    model = tf.estimator.Estimator(
-        model_fn=model_fn,
-        config=config,
-        params=hparams)
+    if args.tpu_name:
+        model = tf.estimator.tpu.TPUEstimator(
+            model_fn=model_fn, config=config, params=hparams, eval_on_tpu=False,
+            train_batch_size=args.batch_size, use_tpu=args.tpu_name != 'fake'
+        )
+    else:
+        model = tf.estimator.Estimator(
+            model_fn=model_fn,
+            config=config,
+            params=hparams)
 
     if args.valid:
         train_spec = tf.estimator.TrainSpec(
-            input_fn=lambda: input_fn(
-                args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
+            input_fn=lambda params: input_fn(
+                args.train, args.vocab, args.norm, num_channels=args.num_channels,
+                batch_size=params.batch_size,
                 num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls))
 
         eval_spec = tf.estimator.EvalSpec(
-            input_fn=lambda: input_fn(
+            input_fn=lambda params: input_fn(
                 args.valid or args.train, args.vocab, args.norm, num_channels=args.num_channels,
-                batch_size=args.batch_size, binf2phone=None, num_parallel_calls=args.num_parallel_calls),
+                batch_size=params.batch_size, binf2phone=None,
+                num_parallel_calls=args.num_parallel_calls),
             start_delay_secs=60,
             throttle_secs=args.eval_secs)
 
@@ -167,8 +189,9 @@ def main(args):
     else:
         tf.logging.warning('Training without evaluation!')
         model.train(
-            input_fn=lambda: input_fn(
-                args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
+            input_fn=lambda params: input_fn(
+                args.train, args.vocab, args.norm, num_channels=args.num_channels,
+                batch_size=params.batch_size,
                 num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls))
 
 

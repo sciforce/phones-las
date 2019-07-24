@@ -348,6 +348,8 @@ def las_model_fn(features,
 
     with tf.name_scope('train'):
         optimizer = tf.train.AdamOptimizer(params.learning_rate)
+        if params.tpu_name and params.tpu_name != 'fake':
+            optimizer = tf.tpu.CrossShardOptimizer(optimizer)
         var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
         total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
         tf.logging.info('Trainable parameters: {}'.format(total_params))
