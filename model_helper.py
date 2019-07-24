@@ -219,12 +219,15 @@ def las_model_fn(features,
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_binf, -1))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
+        emb_c = tf.concat([x.c for x in encoder_state], axis=1)
+        emb_h = tf.concat([x.h for x in encoder_state], axis=1)
+        emb = tf.stack([emb_c, emb_h], axis=1)
         predictions = {
             'embedding': emb,
             'encoder_out': encoder_outputs,
             'source_length': source_sequence_length
         }
-        if sample_ids is not None:
+        if sample_ids_phones is not None:
             predictions['sample_ids'] = sample_ids_phones
         if logits_binf is not None:
             predictions['logits_binf'] = logits_binf
