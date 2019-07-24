@@ -192,7 +192,9 @@ def main(args):
             input_fn=lambda params: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels,
                 batch_size=params.batch_size,
-                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls))
+                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls),
+            steps=args.num_epochs * 1000 * hparams.batch_size
+        )
 
 
 if __name__ == '__main__':
