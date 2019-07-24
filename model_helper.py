@@ -149,9 +149,6 @@ def las_model_fn(features,
                  params,
                  binf2phone=None,
                  run_name=None):
-    if tf.estimator.ModeKeys.PREDICT == mode:
-        params.use_text = False
-
     encoder_inputs = features['encoder_inputs']
     source_sequence_length = features['source_sequence_length']
 
@@ -218,12 +215,8 @@ def las_model_fn(features,
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_binf, -1))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        emb_c = tf.concat([x.c for x in encoder_state], axis=1)
-        emb_h = tf.concat([x.h for x in encoder_state], axis=1)
-        emb = tf.stack([emb_c, emb_h], axis=1)
         predictions = {
             'sample_ids': sample_ids_phones,
-            'embedding': emb,
             'encoder_out': encoder_outputs,
             'source_length': source_sequence_length
         }
@@ -262,11 +255,36 @@ def las_model_fn(features,
     with tf.name_scope('cross_entropy'):
         audio_loss = compute_loss(
             logits, targets, final_sequence_length, target_sequence_length, mode)
+        tf.summary.scalar('audio_loss', audio_loss)
     if params.decoder.binary_outputs and mode == tf.estimator.ModeKeys.TRAIN:
         with tf.name_scope('cross_entropy_binf'):
             audio_loss_binf = compute_loss_sigmoid(logits_binf, targets_binf,
                                                    final_sequence_length, target_sequence_length, mode)
         audio_loss += audio_loss_binf
+        tf.summary.scalar('audio_loss_binf', audio_loss_binf)
+
+    ctc_weight = 0.1
+    ctc_edit_distance = None
+    if ctc_weight > 0:
+        ctc_logits = tf.layers.dense(encoder_outputs, params.decoder.target_vocab_size + 1,
+                                     activation=None, name='ctc_logits')
+        decoded_ctc, _ = tf.nn.ctc_greedy_decoder(tf.transpose(ctc_logits, [1, 0, 2]), source_sequence_length)
+        decoded_ctc = tf.sparse.to_dense(decoded_ctc[0])
+        decoded_ctc = tf.cast(decoded_ctc, tf.int32)
+        if target_sequence_length is not None:
+            ctc_loss = tf.nn.ctc_loss_v2(labels=targets, logits=ctc_logits, logits_time_major=False,
+                                         label_length=target_sequence_length, logit_length=source_sequence_length)
+            ctc_loss = tf.reduce_mean(ctc_loss, name='ctc_phone_loss')
+            audio_loss += ctc_loss * ctc_weight
+            tf.summary.scalar('ctc_loss', ctc_loss)
+            with tf.name_scope('ctc_metrics'):
+                ctc_edit_distance = utils.edit_distance(
+                    decoded_ctc, targets, utils.EOS_ID, params.mapping if mapping is None else None)
+                metrics['ctc_edit_distance'] = tf.metrics.mean(ctc_edit_distance)
+            if mode != tf.estimator.ModeKeys.TRAIN:
+                tf.summary.scalar('ctc_edit_distance', metrics['ctc_edit_distance'][1])
+            else:
+                tf.summary.scalar('ctc_edit_distance', tf.reduce_mean(ctc_edit_distance))
 
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('alignment'):
@@ -327,6 +345,8 @@ def las_model_fn(features,
 
     loss = audio_loss
     train_log_data = {'loss': loss, 'edit_distance': tf.reduce_mean(edit_distance)}
+    if ctc_edit_distance is not None:
+        train_log_data['ctc_edit_distance'] = tf.reduce_mean(ctc_edit_distance)
     logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
 
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])

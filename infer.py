@@ -3,6 +3,7 @@ import os
 import tensorflow as tf
 from joblib import dump
 from tqdm import tqdm
+import numpy as np
 from editdistance import eval as edist
 import librosa
 import pandas as pd
@@ -370,13 +371,11 @@ def main(args):
 
     if args.beam_width > 0:
         predictions = [{
-            'transcription': to_text(vocab_list, y[phone_pred_key][:, 0]),
-            'embedding': y['embedding']
+            'transcription': to_text(vocab_list, y[phone_pred_key][:, 0])
         } for y in predictions]
     else:
         predictions = [{
-            'transcription': to_text(vocab_list, y[phone_pred_key]),
-            'embedding': y['embedding']
+            'transcription': to_text(vocab_list, y[phone_pred_key])
         } for y in predictions]
     
     save_to = os.path.join(args.model_dir, 'infer.txt')

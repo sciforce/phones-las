@@ -114,7 +114,6 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 def main(args):
     vocab_list = utils.load_vocab(args.vocab)
     binf2phone_np = None
-    binf2phone = None
     mapping = None
     vocab_size = len(vocab_list)
     binf_count = None
@@ -160,6 +159,7 @@ def main(args):
 
         tf.estimator.train_and_evaluate(model, train_spec, eval_spec)
     else:
+        tf.logging.warning('Training without evaluation!')
         model.train(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,

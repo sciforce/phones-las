@@ -33,9 +33,6 @@ def get_default_hparams():
         l2_reg_scale=1e-6,
         add_noise=0,
         noise_std=0.1,
-        emb_loss=False,
-        text_loss=False,
-        use_text=False,
 
         # encoder setting
         encoder_layers=3,
@@ -115,9 +112,6 @@ def get_encoder_decoder_hparams(hparams):
     add_noise = hparams.pop_hparam('add_noise')
     noise_std = hparams.pop_hparam('noise_std')
     mapping = hparams.pop_hparam('mapping')
-    emb_loss = hparams.pop_hparam('emb_loss')
-    text_loss = hparams.pop_hparam('text_loss')
-    use_text = hparams.pop_hparam('use_text')
     binary_outputs = hparams.pop_hparam('binary_outputs')
     binf_sampling = hparams.pop_hparam('binf_sampling')
 
@@ -141,9 +135,6 @@ def get_encoder_decoder_hparams(hparams):
     return HParams(
         learning_rate=learning_rate,
         mapping=mapping,
-        emb_loss=emb_loss,
-        text_loss=text_loss,
-        use_text=use_text,
         l2_reg_scale=l2_reg_scale,
         add_noise=add_noise,
         noise_std=noise_std,
