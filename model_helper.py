@@ -5,7 +5,6 @@ import tensorflow.contrib as tf_contrib
 
 import las
 import utils
-import text_ae.model
 
 from utils.training_helper import transform_binf_to_phones
 
@@ -129,19 +128,6 @@ def compute_loss_sigmoid(logits, targets, final_sequence_length, target_sequence
     return loss
 
 
-def compute_emb_loss(encoder_state, reader_encoder_state):
-    try:
-        emb_loss = 0
-        for enc_s, enc_r in zip(encoder_state, reader_encoder_state):
-            emb_loss += tf.losses.mean_squared_error(enc_s.c, enc_r.c)
-            emb_loss += tf.losses.mean_squared_error(enc_s.h, enc_r.h)
-    except AttributeError:
-        emb_loss = 0
-        for enc_s, enc_r in zip(encoder_state, reader_encoder_state):
-            emb_loss += tf.losses.mean_squared_error(enc_s.c, enc_r[-1].c)
-            emb_loss += tf.losses.mean_squared_error(enc_s.h, enc_r[-1].h)
-    return emb_loss
-
 def get_alignment_history(final_context_state, params):
     try:
         res = tf.transpose(final_context_state.alignment_history.stack(), perm=[1, 0, 2])
@@ -152,9 +138,9 @@ def get_alignment_history(final_context_state, params):
         else:
             alignment_history = tf.transpose(final_context_state.cell_state[-1].alignment_history, perm=[1, 0, 2])
         shape = tf.shape(alignment_history)
-        res = tf.reshape(alignment_history,
-            [-1, params.decoder.beam_width, shape[1], shape[2]])
+        res = tf.reshape(alignment_history, [-1, params.decoder.beam_width, shape[1], shape[2]])
     return res
+
 
 def las_model_fn(features,
                  labels,
@@ -163,21 +149,16 @@ def las_model_fn(features,
                  params,
                  binf2phone=None,
                  run_name=None):
-    if tf.estimator.ModeKeys.PREDICT == mode:
-        params.use_text = False
-
     encoder_inputs = features['encoder_inputs']
     source_sequence_length = features['source_sequence_length']
 
     decoder_inputs, decoder_inputs_binf = None, None
     targets = None
     target_sequence_length = None
-
+    targets_binf = None
     binf_embedding = None
     if binf2phone is not None and params.decoder.binary_outputs:
         binf_embedding = tf.constant(binf2phone, dtype=tf.float32, name='binf2phone')
-    is_binf_outputs = params.decoder.binary_outputs and params.decoder.binf_sampling and (
-        binf_embedding is None or mode == tf.estimator.ModeKeys.TRAIN)
 
     mapping = None
     if params.mapping and binf_embedding is not None:
@@ -194,50 +175,12 @@ def las_model_fn(features,
             targets_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), targets)
             decoder_inputs_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), decoder_inputs)
 
-    text_loss = 0
-    text_edit_distance = reader_encoder_state = None
-    if params.use_text:
-        tf.logging.info('Building reader')
-
-        with tf.variable_scope('reader'):
-            (reader_encoder_outputs, reader_source_sequence_length), reader_encoder_state = text_ae.model.reader(
-                decoder_inputs, target_sequence_length, mode,
-                params.encoder, params.decoder.target_vocab_size)
-
-        tf.logging.info('Building writer')
-
-        with tf.variable_scope('writer'):
-            writer_decoder_outputs, writer_final_context_state, writer_final_sequence_length = text_ae.model.speller(
-                reader_encoder_outputs, reader_encoder_state, decoder_inputs,
-                reader_source_sequence_length, target_sequence_length,
-                mode, params.decoder)
-
-        with tf.name_scope('text_prediciton'):
-            logits = writer_decoder_outputs.rnn_output
-            sample_ids = tf.to_int32(tf.argmax(logits, -1))
-
-        with tf.name_scope('text_metrics'):
-            text_edit_distance = utils.edit_distance(
-                sample_ids, targets, utils.EOS_ID, params.mapping if mapping is None else None)
-
-            metrics = {
-                'text_edit_distance': tf.metrics.mean(text_edit_distance),
-            }
-
-        tf.summary.scalar('text_edit_distance', metrics['text_edit_distance'][1])
-
-        with tf.name_scope('text_cross_entropy'):
-            text_loss = compute_loss(
-                logits, targets, writer_final_sequence_length, target_sequence_length, mode)
-
     tf.logging.info('Building listener')
-
     with tf.variable_scope('listener'):
         (encoder_outputs, source_sequence_length), encoder_state = las.model.listener(
             encoder_inputs, source_sequence_length, mode, params.encoder)
 
     tf.logging.info('Building speller')
-
     decoder_outputs, final_context_state, final_sequence_length = None, None, None
     if not params.decoder.binary_outputs or params.decoder.multitask:
         with tf.variable_scope('speller'):
@@ -270,7 +213,6 @@ def las_model_fn(features,
             if decoder_outputs_binf is not None:
                 logits_binf = decoder_outputs_binf.rnn_output
                 if params.decoder.binary_outputs and params.decoder.binf_sampling:
-                    sample_ids_binf = tf.to_int32(tf.round(tf.sigmoid(logits_binf)))
                     logits_phones_binf = transform_binf_to_phones(logits_binf, binf_embedding)
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_phones_binf, -1))
                 else:
@@ -285,7 +227,7 @@ def las_model_fn(features,
             'encoder_out': encoder_outputs,
             'source_length': source_sequence_length
         }
-        if sample_ids is not None:
+        if sample_ids_phones is not None:
             predictions['sample_ids'] = sample_ids_phones
         if logits_binf is not None:
             predictions['logits_binf'] = logits_binf
@@ -308,7 +250,6 @@ def las_model_fn(features,
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
     metrics = None
-
     edit_distance, edit_distance_binf = None, None
     with tf.name_scope('metrics'):
         if sample_ids_phones is not None:
@@ -321,16 +262,13 @@ def las_model_fn(features,
             'edit_distance': tf.metrics.mean(edit_distance if edit_distance is not None else edit_distance_binf),
         }
 
-    if params.use_text and not params.emb_loss:
-        pass
+    # In TRAIN model this becomes an significantly affected by early high values.
+    # As a result in summaries train values would be high and drop after restart.
+    # To prevent this, we use last batch average in case of TRAIN.
+    if mode != tf.estimator.ModeKeys.TRAIN:
+        tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
     else:
-        # In TRAIN model this becomes an significantly affected by early high values.
-        # As a result in summaries train values would be high and drop after restart.
-        # To prevent this, we use last batch average in case of TRAIN.
-        if mode != tf.estimator.ModeKeys.TRAIN:
-            tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
-        else:
-            tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf))
+        tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf))
 
     audio_loss_ipa, audio_loss_binf = None, None
     if logits is not None:
@@ -356,44 +294,52 @@ def las_model_fn(features,
         audio_loss += audio_loss_ipa
     if audio_loss_binf is not None:
         audio_loss += audio_loss_binf
+        tf.summary.scalar('audio_loss_binf', audio_loss_binf)
 
-    emb_loss = 0
-    if params.use_text:
-        with tf.name_scope('embeddings_loss'):
-            emb_loss = compute_emb_loss(encoder_state, reader_encoder_state)
+    ctc_edit_distance = None
+    if params.ctc_weight > 0:
+        ctc_logits = tf.layers.dense(encoder_outputs, params.decoder.target_vocab_size + 1,
+                                     activation=None, name='ctc_logits')
+        decoded_ctc, _ = tf.nn.ctc_greedy_decoder(tf.transpose(ctc_logits, [1, 0, 2]), source_sequence_length)
+        decoded_ctc = tf.sparse.to_dense(decoded_ctc[0])
+        decoded_ctc = tf.cast(decoded_ctc, tf.int32)
+        if target_sequence_length is not None:
+            ctc_loss = tf.nn.ctc_loss_v2(labels=targets, logits=ctc_logits, logits_time_major=False,
+                                         label_length=target_sequence_length, logit_length=source_sequence_length)
+            ctc_loss = tf.reduce_mean(ctc_loss, name='ctc_phone_loss')
+            audio_loss += ctc_loss * params.ctc_weight
+            tf.summary.scalar('ctc_loss', ctc_loss)
+            with tf.name_scope('ctc_metrics'):
+                ctc_edit_distance = utils.edit_distance(
+                    decoded_ctc, targets, utils.EOS_ID, params.mapping if mapping is None else None)
+                metrics['ctc_edit_distance'] = tf.metrics.mean(ctc_edit_distance)
+            if mode != tf.estimator.ModeKeys.TRAIN:
+                tf.summary.scalar('ctc_edit_distance', metrics['ctc_edit_distance'][1])
+            else:
+                tf.summary.scalar('ctc_edit_distance', tf.reduce_mean(ctc_edit_distance))
 
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('alignment'):
             attention_images = utils.create_attention_images(
                 final_context_state or final_context_state_binf)
 
-        if params.use_text and not params.emb_loss:
-            hooks = []
-            loss = text_loss
-        else:
-            run_name = run_name or 'eval'
-            if run_name != 'eval':
-                # For other summaries eval is automatically added.
-                run_name = 'eval_{}'.format(run_name)
-            attention_summary = tf.summary.image(
-                'attention_images', attention_images)
-            eval_summary_hook = tf.train.SummarySaverHook(
-                save_steps=20,
-                output_dir=os.path.join(config.model_dir, run_name),
-                summary_op=attention_summary)
-            hooks = [eval_summary_hook]
-            loss = audio_loss
+        run_name = run_name or 'eval'
+        if run_name != 'eval':
+            # For other summaries eval is automatically added.
+            run_name = 'eval_{}'.format(run_name)
+        attention_summary = tf.summary.image(
+            'attention_images', attention_images)
+        eval_summary_hook = tf.train.SummarySaverHook(
+            save_steps=20,
+            output_dir=os.path.join(config.model_dir, run_name),
+            summary_op=attention_summary)
+        hooks = [eval_summary_hook]
+        loss = audio_loss
         log_data = {
             'edit_distance': tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf),
             'max_edit_distance': tf.reduce_max(edit_distance if edit_distance is not None else edit_distance_binf),
             'min_edit_distance': tf.reduce_min(edit_distance if edit_distance is not None else edit_distance_binf)
         }
-        if params.use_text:
-            if not params.emb_loss:
-                log_data = {}
-            else:
-                log_data['emb_loss'] = tf.reduce_mean(emb_loss)
-            log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
         logging_hook = tf.train.LoggingTensorHook(log_data, every_n_iter=20)
         hooks += [logging_hook]
 
@@ -403,70 +349,38 @@ def las_model_fn(features,
     with tf.name_scope('train'):
         optimizer = tf.train.AdamOptimizer(params.learning_rate)
         var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        if params.use_text:
-            audio_var_list = [x for x in var_list
-                              if not x.name.startswith('reader') and not x.name.startswith('writer')]
-            total_params = np.sum([np.prod(x.shape.as_list()) for x in audio_var_list])
-            tf.logging.info('Trainable audio parameters: {}'.format(total_params))
-            text_var_list = [x for x in var_list
-                             if not x.name.startswith('listener') and not x.name.startswith('speller')]
-            total_params = np.sum([np.prod(x.shape.as_list()) for x in text_var_list])
-            tf.logging.info('Trainable text parameters: {}'.format(total_params))
-            gvs = optimizer.compute_gradients(audio_loss, var_list=audio_var_list)
-            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
-            audio_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
-            gvs = optimizer.compute_gradients(text_loss, var_list=text_var_list)
-            # No attention means that top layers won't affect anything.Thus gradients for them would be None.
-            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs if grad is not None]
-            text_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
-            gvs = optimizer.compute_gradients(emb_loss, var_list=audio_var_list)
-            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs if grad is not None]
-            emb_train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
-            if not params.text_loss:
-                tf.logging.info('Removing reader and writer from optimization.')
-                train_op = tf.group(audio_train_op, emb_train_op)
-            elif not params.emb_loss:
-                tf.logging.info('Removing listener and speller from optimization params.')
-                train_op = text_train_op
-            else:
-                raise ValueError('Either text_loss or emb_loss must be set with use_text!')
-        else:
-            total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
-            tf.logging.info('Trainable parameters: {}'.format(total_params))
+        total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
+        tf.logging.info('Trainable parameters: {}'.format(total_params))
 
-            regularizer = tf_contrib.layers.l2_regularizer(params.l2_reg_scale)
-            reg_term = tf.contrib.layers.apply_regularization(regularizer, var_list)
-            audio_loss = audio_loss + reg_term
+        regularizer = tf_contrib.layers.l2_regularizer(params.l2_reg_scale)
+        reg_term = tf.contrib.layers.apply_regularization(regularizer, var_list)
+        audio_loss = audio_loss + reg_term
 
-            gvs = optimizer.compute_gradients(audio_loss, var_list=var_list)
-            capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
-            train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
-            if params.add_noise > 0:
-                def add_noise():
-                    noise_ops = [train_op]
-                    for var in var_list:
-                        if var.name.endswith('kernel:0'):
-                            shape = tf.shape(var)
-                            noise_op = tf.assign_add(var, tf.random_normal(shape, NOISE_MEAN, params.noise_std, dtype=tf.float32))
-                            noise_ops.append(noise_op)
-                    print_op = tf.print('Adding noise to weights')
-                    return tf.group(*noise_ops, print_op)
-                train_op = tf.cond(
-                    tf.logical_and(tf.equal(tf.mod(tf.train.get_global_step(), params.add_noise), 0),
-                        tf.greater(tf.train.get_global_step(), 0)),
-                    add_noise, lambda: train_op)
+        gvs = optimizer.compute_gradients(audio_loss, var_list=var_list)
+        capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+        train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
+        if params.add_noise > 0:
+            def add_noise():
+                noise_ops = [train_op]
+                for var in var_list:
+                    if var.name.endswith('kernel:0'):
+                        shape = tf.shape(var)
+                        noise_op = tf.assign_add(var, tf.random_normal(shape, NOISE_MEAN, params.noise_std,
+                                                                       dtype=tf.float32))
+                        noise_ops.append(noise_op)
+                print_op = tf.print('Adding noise to weights')
+                return tf.group(*noise_ops, print_op)
+            train_op = tf.cond(
+                tf.logical_and(tf.equal(tf.mod(tf.train.get_global_step(), params.add_noise), 0),
+                               tf.greater(tf.train.get_global_step(), 0)),
+                add_noise, lambda: train_op)
 
-    loss = text_loss if params.use_text and not params.emb_loss else audio_loss
-    train_log_data = {
-        'loss': loss
-    }
-    if params.use_text:
-        if params.emb_loss:
-            train_log_data['edit_distance'] = tf.reduce_mean(edit_distance)
-            train_log_data['emb_loss'] = tf.reduce_mean(emb_loss)
-        train_log_data['text_edit_distance'] = tf.reduce_mean(text_edit_distance)
-    else:
-        train_log_data['edit_distance'] = tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf)
+    loss = audio_loss
+    train_log_data = {'loss': loss,
+                      'edit_distance': tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf)}
+    if ctc_edit_distance is not None:
+        train_log_data['ctc_edit_distance'] = tf.reduce_mean(ctc_edit_distance)
     logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
 
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
+

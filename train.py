@@ -1,6 +1,5 @@
 import argparse
 import tensorflow as tf
-import pandas as pd
 
 import utils
 
@@ -74,10 +73,6 @@ def parse_args():
                         help='How often (in steps) to add Gaussian noise to the weights, zero for disabling noise addition.')
     parser.add_argument('--noise_std', type=float, default=0.1,
                         help='Weigth noise standard deviation.')
-    parser.add_argument('--use_text', action='store_true', help='use textual information for encoder regularization')
-    parser.add_argument('--emb_loss', action='store_true',
-                        help='audio encoder regularization using text encoder')
-    parser.add_argument('--text_loss', action='store_true', help='train text encoder')
     parser.add_argument('--binary_outputs', action='store_true',
                         help='make projection layer output binary feature posteriors instead of phone posteriors')
     parser.add_argument('--output_ipa', action='store_true',
@@ -85,6 +80,8 @@ def parse_args():
                              ' change sampling algorithm at training')
     parser.add_argument('--binf_map', type=str, default='misc/binf_map.csv',
                         help='Path to CSV with phonemes to binary features map')
+    parser.add_argument('--ctc_weight', type=float, default=-1.,
+                        help='If possitive, adds CTC mutlitask target based on encoder.')
     parser.add_argument('--reset', help='Reset HParams.', action='store_true')
     parser.add_argument('--binf_sampling', action='store_true',
                         help='with --output_ipa, do not use ipa sampling algorithm for trainin, only for validation')
@@ -123,7 +120,6 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 def main(args):
     vocab_list = utils.load_vocab(args.vocab)
     binf2phone_np = None
-    binf2phone = None
     mapping = None
     vocab_size = len(vocab_list)
     binf_count = None
@@ -169,6 +165,7 @@ def main(args):
 
         tf.estimator.train_and_evaluate(model, train_spec, eval_spec)
     else:
+        tf.logging.warning('Training without evaluation!')
         model.train(
             input_fn=lambda: input_fn(
                 args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,

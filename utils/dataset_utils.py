@@ -28,6 +28,7 @@ def read_dataset(filename, num_channels=39, labels_shape=[], labels_dtype=tf.str
         filename = [x.strip() for x in open(filename, 'r').readlines()]
     dataset = tf.data.TFRecordDataset(filename, num_parallel_reads=4)
     dataset = dataset.map(parse_fn)
+    dataset = dataset.cache()
 
     return dataset
 
@@ -59,7 +60,8 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
             padding_values={
                     'encoder_inputs': 0.0,
                     'source_sequence_length': 0,
-                })
+                },
+            drop_remainder=True)
     else:
         output_buffer_size = batch_size * 1000
 
@@ -142,6 +144,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                     'targets_inputs': 0 if binary_targets else eos_id,
                     'targets_outputs': 0 if binary_targets else eos_id,
                     'target_sequence_length': 0,
-                }))
+                }),
+        drop_remainder=True)
 
     return dataset
