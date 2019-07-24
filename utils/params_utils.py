@@ -33,6 +33,7 @@ def get_default_hparams():
         l2_reg_scale=1e-6,
         add_noise=0,
         noise_std=0.1,
+        ctc_weight=-1.,
 
         # encoder setting
         encoder_layers=3,
@@ -107,6 +108,7 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
 
 def get_encoder_decoder_hparams(hparams):
     learning_rate = hparams.pop_hparam('learning_rate')
+    ctc_weight = hparams.pop_hparam('ctc_weight')
     dropout = hparams.pop_hparam('dropout')
     l2_reg_scale = hparams.pop_hparam('l2_reg_scale')
     add_noise = hparams.pop_hparam('add_noise')
@@ -138,5 +140,6 @@ def get_encoder_decoder_hparams(hparams):
         l2_reg_scale=l2_reg_scale,
         add_noise=add_noise,
         noise_std=noise_std,
+        ctc_weight=ctc_weight,
         encoder=encoder_hparams,
         decoder=decoder_hparams)

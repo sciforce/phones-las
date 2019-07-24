@@ -263,9 +263,8 @@ def las_model_fn(features,
         audio_loss += audio_loss_binf
         tf.summary.scalar('audio_loss_binf', audio_loss_binf)
 
-    ctc_weight = 0.1
     ctc_edit_distance = None
-    if ctc_weight > 0:
+    if params.ctc_weight > 0:
         ctc_logits = tf.layers.dense(encoder_outputs, params.decoder.target_vocab_size + 1,
                                      activation=None, name='ctc_logits')
         decoded_ctc, _ = tf.nn.ctc_greedy_decoder(tf.transpose(ctc_logits, [1, 0, 2]), source_sequence_length)
@@ -275,7 +274,7 @@ def las_model_fn(features,
             ctc_loss = tf.nn.ctc_loss_v2(labels=targets, logits=ctc_logits, logits_time_major=False,
                                          label_length=target_sequence_length, logit_length=source_sequence_length)
             ctc_loss = tf.reduce_mean(ctc_loss, name='ctc_phone_loss')
-            audio_loss += ctc_loss * ctc_weight
+            audio_loss += ctc_loss * params.ctc_weight
             tf.summary.scalar('ctc_loss', ctc_loss)
             with tf.name_scope('ctc_metrics'):
                 ctc_edit_distance = utils.edit_distance(

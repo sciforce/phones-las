@@ -80,6 +80,8 @@ def parse_args():
                              ' change sampling algorithm at training')
     parser.add_argument('--binf_map', type=str, default='misc/binf_map.csv',
                         help='Path to CSV with phonemes to binary features map')
+    parser.add_argument('--ctc_weight', type=float, default=-1.,
+                        help='If possitive, adds CTC mutlitask target based on encoder.')
     parser.add_argument('--reset', help='Reset HParams.', action='store_true')
     parser.add_argument('--binf_sampling', action='store_true',
                         help='with --output_ipa, do not use ipa sampling algorithm for trainin, only for validation')
