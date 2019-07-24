@@ -176,12 +176,14 @@ def attend(encoder_outputs,
 
     alignment_history = (mode != tf.estimator.ModeKeys.TRAIN)
 
+    attention_layer_size = hparams.binf_count if hparams.binf_projection else hparams.attention_layer_size
+
     if hparams.bottom_only:
         attention_cell = cell_list.pop(0)
 
         attention_cell = tf_contrib.seq2seq.AttentionWrapper(
             attention_cell, attention_mechanism,
-            attention_layer_size=hparams.attention_layer_size,
+            attention_layer_size=attention_layer_size,
             alignment_history=alignment_history)
 
         decoder_cell = AttentionMultiCell(attention_cell, cell_list)
@@ -190,7 +192,7 @@ def attend(encoder_outputs,
 
         decoder_cell = tf_contrib.seq2seq.AttentionWrapper(
             decoder_cell, attention_mechanism,
-            attention_layer_size=hparams.attention_layer_size,
+            attention_layer_size=attention_layer_size,
             alignment_history=alignment_history)
 
     return decoder_cell
@@ -241,8 +243,9 @@ def speller(encoder_outputs,
 
     projection_layer = DenseBinfDecoder(
         hparams.target_vocab_size if not binary_outputs else hparams.binf_count,
-        binf_to_ipa=binf_embedding if mode != tf.estimator.ModeKeys.TRAIN else None,
+        binf_to_ipa=binf_embedding if mode != tf.estimator.ModeKeys.TRAIN or hparams.binf_projection else None,
         use_bias=True, name='projection_layer',
+        inner_projection_layer=not hparams.binf_projection,
         kernel_initializer=tf.random_uniform_initializer(minval=-0.075, maxval=0.075))
 
     if hparams.pass_hidden_state and hparams.bottom_only:

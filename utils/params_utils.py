@@ -58,6 +58,8 @@ def get_default_hparams():
         beam_width=0,
         binary_outputs=False,
         binf_sampling=False,
+        binf_projection=False,
+        multitask=False,
         # evaluation setting
         mapping=None)
 
@@ -116,6 +118,8 @@ def get_encoder_decoder_hparams(hparams):
     mapping = hparams.pop_hparam('mapping')
     binary_outputs = hparams.pop_hparam('binary_outputs')
     binf_sampling = hparams.pop_hparam('binf_sampling')
+    binf_projection = hparams.pop_hparam('binf_projection')
+    multitask = hparams.pop_hparam('multitask')
 
     encoder_hparams = HParams(
         num_layers=hparams.pop_hparam('encoder_layers'),
@@ -129,7 +133,9 @@ def get_encoder_decoder_hparams(hparams):
         num_units=hparams.pop_hparam('decoder_units'),
         dropout=dropout,
         binary_outputs=binary_outputs,
-        binf_sampling=binf_sampling)
+        binf_sampling=binf_sampling,
+        binf_projection=binf_projection,
+        multitask=multitask)
 
     for name, value in hparams.values().items():
         decoder_hparams.add_hparam(name, value)
