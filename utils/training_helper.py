@@ -8,6 +8,7 @@ __all__ = [
     'transform_binf_to_phones'
 ]
 
+
 def transform_binf_to_phones(outputs, binf_to_ipa):
     # Transform binary features logits to phone log probabilities (unnormalized)
     log_prob_ones = -tf.log(1 + tf.exp(-outputs))
@@ -37,6 +38,7 @@ class TrainingSigmoidHelper(tf_contrib.seq2seq.TrainingHelper):
                 sample_ids = tf.round(tf.sigmoid(outputs))
                 # sample_ids = tf.sigmoid(outputs) #TODO: experiment with non-binarlized outputs
             return sample_ids
+
 
 class ScheduledSigmoidHelper(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper):
     def __init__(self, inputs, sequence_length, embedding, sampling_probability,
@@ -70,6 +72,7 @@ class ScheduledSigmoidHelper(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper
             # tf.sigmoid(outputs), #TODO: experiment with non-binarlized outputs
             tf.fill(tf.shape(outputs), -1.0))
 
+
 class DenseBinfDecoder(tf.layers.Dense):
     '''
     Fully connected layer modification, which transforms
@@ -83,7 +86,7 @@ class DenseBinfDecoder(tf.layers.Dense):
 
     def call(self, inputs):
         if self.inner_projection_layer:
-            outputs = super().call(inputs)
+            outputs = super(DenseBinfDecoder, self).call(inputs)
         else:
             outputs = inputs
         if self.binf_to_ipa is not None:
