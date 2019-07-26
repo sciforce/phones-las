@@ -385,5 +385,8 @@ def las_model_fn(features,
         train_log_data['ctc_edit_distance'] = tf.reduce_mean(ctc_edit_distance)
     logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
 
-    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
+    if not params.tpu_name:
+        return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
+    else:
+        return tf.estimator.tpu.TPUEstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
 
