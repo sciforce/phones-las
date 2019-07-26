@@ -141,6 +141,7 @@ def get_encoder_decoder_hparams(hparams):
         binary_outputs=binary_outputs,
         binf_sampling=binf_sampling,
         binf_projection=binf_projection,
+        max_symbols=max_symbols,
         multitask=multitask)
 
     for name, value in hparams.values().items():

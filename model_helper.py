@@ -251,7 +251,6 @@ def las_model_fn(features,
 
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
-    metrics = None
     edit_distance, edit_distance_binf = None, None
     with tf.name_scope('metrics'):
         if sample_ids_phones is not None:
