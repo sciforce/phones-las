@@ -74,7 +74,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
             sos_id = tf.cast(vocab_table.lookup(tf.constant(sos)), tf.int32)
             eos_id = tf.cast(vocab_table.lookup(tf.constant(eos)), tf.int32)
 
-        dataset = dataset.repeat(num_epochs)
+        dataset = dataset.repeat(num_epochs if num_epochs > 0 else None)
 
         if not is_infer:
             dataset = dataset.shuffle(output_buffer_size)
@@ -164,6 +164,6 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                     'targets_outputs': 0 if binary_targets else eos_id,
                     'target_sequence_length': 0,
                 }),
-        drop_remainder=True)
+            drop_remainder=True)
 
     return dataset
