@@ -268,7 +268,7 @@ def las_model_fn(features,
     # To prevent this, we use last batch average in case of TRAIN.
     if mode != tf.estimator.ModeKeys.TRAIN:
         tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
-    else:
+    elif not params.tpu_name:
         tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf))
 
     audio_loss_ipa, audio_loss_binf = None, None
