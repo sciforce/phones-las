@@ -22,10 +22,12 @@ def compute_loss(logits, targets, final_sequence_length, target_sequence_length,
     assert mode != tf.estimator.ModeKeys.PREDICT
 
     if mode == tf.estimator.ModeKeys.TRAIN:
-        target_weights = tf.sequence_mask(
-            target_sequence_length, dtype=tf.float32)
-        loss = tf_contrib.seq2seq.sequence_loss(
-            logits, targets, target_weights)
+        if targets.shape[1].value is not None:
+            logits = tf.pad(logits, [[0, 0], [0, tf.maximum(
+                0, targets.shape[1].value - tf.shape(logits)[1])], [0, 0]], constant_values=0)
+            logits.set_shape([targets.shape[0].value, targets.shape[1].value, logits.shape[2].value])
+        target_weights = tf.sequence_mask(target_sequence_length, maxlen=targets.shape[1].value, dtype=tf.float32)
+        loss = tf_contrib.seq2seq.sequence_loss(logits, targets, target_weights)
     else:
         '''
         # Reference: https://github.com/tensorflow/nmt/issues/2
