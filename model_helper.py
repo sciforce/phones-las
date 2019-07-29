@@ -22,10 +22,12 @@ def compute_loss(logits, targets, final_sequence_length, target_sequence_length,
     assert mode != tf.estimator.ModeKeys.PREDICT
 
     if mode == tf.estimator.ModeKeys.TRAIN:
-        target_weights = tf.sequence_mask(
-            target_sequence_length, dtype=tf.float32)
-        loss = tf_contrib.seq2seq.sequence_loss(
-            logits, targets, target_weights)
+        if targets.shape[1].value is not None:
+            logits = tf.pad(logits, [[0, 0], [0, tf.maximum(
+                0, targets.shape[1].value - tf.shape(logits)[1])], [0, 0]], constant_values=0)
+            logits.set_shape([targets.shape[0].value, targets.shape[1].value, logits.shape[2].value])
+        target_weights = tf.sequence_mask(target_sequence_length, maxlen=targets.shape[1].value, dtype=tf.float32)
+        loss = tf_contrib.seq2seq.sequence_loss(logits, targets, target_weights)
     else:
         '''
         # Reference: https://github.com/tensorflow/nmt/issues/2
@@ -249,7 +251,6 @@ def las_model_fn(features,
 
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
-    metrics = None
     edit_distance, edit_distance_binf = None, None
     with tf.name_scope('metrics'):
         if sample_ids_phones is not None:
@@ -267,7 +268,7 @@ def las_model_fn(features,
     # To prevent this, we use last batch average in case of TRAIN.
     if mode != tf.estimator.ModeKeys.TRAIN:
         tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
-    else:
+    elif not params.tpu_name:
         tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf))
 
     audio_loss_ipa, audio_loss_binf = None, None
@@ -348,6 +349,8 @@ def las_model_fn(features,
 
     with tf.name_scope('train'):
         optimizer = tf.train.AdamOptimizer(params.learning_rate)
+        if params.tpu_name and params.tpu_name != 'fake':
+            optimizer = tf.tpu.CrossShardOptimizer(optimizer)
         var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
         total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
         tf.logging.info('Trainable parameters: {}'.format(total_params))
@@ -382,5 +385,8 @@ def las_model_fn(features,
         train_log_data['ctc_edit_distance'] = tf.reduce_mean(ctc_edit_distance)
     logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
 
-    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
+    if not params.tpu_name:
+        return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
+    else:
+        return tf.estimator.tpu.TPUEstimatorSpec(mode, loss=loss, train_op=train_op)
 

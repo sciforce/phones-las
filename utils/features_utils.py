@@ -21,5 +21,6 @@ def calculate_mfcc_op(sample_rate, coeffs, window, step, mels):
 
 
 def load_normalization(norm_path):
-    means, stds = joblib.load(norm_path)
+    with tf.gfile.Open(norm_path, 'rb') as f:
+        means, stds = joblib.load(f)
     return means, stds

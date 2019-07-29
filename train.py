@@ -89,12 +89,17 @@ def parse_args():
                         help='with --binary_outputs and --output_ipa, use binary features mapping instead of decoder''s projection layer.')
     parser.add_argument('--multitask', action='store_true',
                         help='with --binary_outputs use both binary features and IPA decoders.')
+    parser.add_argument('--tpu_name', type=str, default='', help='TPU name. Leave blank to prevent TPU training.')
+    parser.add_argument('--max_frames', type=int, default=-1,
+                        help='If positives, sets that much frames for each batch.')
+    parser.add_argument('--max_symbols', type=int, default=-1,
+                        help='If positives, sets that much symbols for each batch.')
 
     return parser.parse_args()
 
 
 def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=39, batch_size=8, num_epochs=1,
-    binf2phone=None, num_parallel_calls=32):
+    binf2phone=None, num_parallel_calls=32, max_frames=-1, max_symbols=-1):
     binary_targets = binf2phone is not None
     labels_shape = [] if not binary_targets else len(binf2phone.index)
     labels_dtype = tf.string if not binary_targets else tf.float32
@@ -112,7 +117,9 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 
     dataset = utils.process_dataset(
         dataset, vocab_table, sos, eos, means, stds, batch_size, num_epochs,
-        binary_targets=binary_targets, labels_shape=labels_shape, num_parallel_calls=num_parallel_calls)
+        binary_targets=binary_targets, labels_shape=labels_shape, num_parallel_calls=num_parallel_calls,
+        max_frames=max_frames, max_symbols=max_symbols
+    )
 
     return dataset
 
@@ -132,7 +139,20 @@ def main(args):
         if args.output_ipa:
             binf2phone_np = binf2phone.values
 
-    config = tf.estimator.RunConfig(model_dir=args.model_dir)
+    if args.tpu_name:
+        iterations_per_loop = 100
+        tpu_cluster_resolver = None
+        if args.tpu_name != 'fake':
+            tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(args.tpu_name)
+        config = tf.estimator.tpu.RunConfig(
+            cluster=tpu_cluster_resolver,
+            model_dir=args.model_dir,
+            save_checkpoints_steps=max(600, iterations_per_loop),
+            tpu_config=tf.estimator.tpu.TPUConfig(
+                iterations_per_loop=iterations_per_loop,
+                per_host_input_for_training=tf.estimator.tpu.InputPipelineConfig.PER_HOST_V2))
+    else:
+        config = tf.estimator.RunConfig(model_dir=args.model_dir)
     hparams = utils.create_hparams(
         args, vocab_size, binf_count, utils.SOS_ID, utils.EOS_ID)
     if mapping is not None:
@@ -145,21 +165,32 @@ def main(args):
         return las_model_fn(features, labels, mode, config, params,
             binf2phone=binf_map)
 
-    model = tf.estimator.Estimator(
-        model_fn=model_fn,
-        config=config,
-        params=hparams)
+    if args.tpu_name:
+        model = tf.estimator.tpu.TPUEstimator(
+            model_fn=model_fn, config=config, params=hparams, eval_on_tpu=False,
+            train_batch_size=args.batch_size, use_tpu=args.tpu_name != 'fake'
+        )
+    else:
+        model = tf.estimator.Estimator(
+            model_fn=model_fn,
+            config=config,
+            params=hparams)
 
     if args.valid:
         train_spec = tf.estimator.TrainSpec(
-            input_fn=lambda: input_fn(
-                args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls))
+            input_fn=lambda params: input_fn(
+                args.train, args.vocab, args.norm, num_channels=args.num_channels,
+                batch_size=params.batch_size if 'batch_size' in params else args.batch_size,
+                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls,
+                max_frames=args.max_frames, max_symbols=args.max_symbols),
+            max_steps=args.num_epochs * 1000 * args.batch_size
+        )
 
         eval_spec = tf.estimator.EvalSpec(
-            input_fn=lambda: input_fn(
+            input_fn=lambda params: input_fn(
                 args.valid or args.train, args.vocab, args.norm, num_channels=args.num_channels,
-                batch_size=args.batch_size, binf2phone=None, num_parallel_calls=args.num_parallel_calls),
+                batch_size=params.batch_size if 'batch_size' in params else args.batch_size, binf2phone=None,
+                num_parallel_calls=args.num_parallel_calls, max_frames=args.max_frames, max_symbols=args.max_symbols),
             start_delay_secs=60,
             throttle_secs=args.eval_secs)
 
@@ -167,9 +198,13 @@ def main(args):
     else:
         tf.logging.warning('Training without evaluation!')
         model.train(
-            input_fn=lambda: input_fn(
-                args.train, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
-                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls))
+            input_fn=lambda params: input_fn(
+                args.train, args.vocab, args.norm, num_channels=args.num_channels,
+                batch_size=params.batch_size if 'batch_size' in params else args.batch_size,
+                num_epochs=args.num_epochs, binf2phone=None, num_parallel_calls=args.num_parallel_calls,
+                max_frames=args.max_frames, max_symbols=args.max_symbols),
+            steps=args.num_epochs * 1000 * args.batch_size
+        )
 
 
 if __name__ == '__main__':

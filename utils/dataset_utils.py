@@ -35,7 +35,7 @@ def read_dataset(filename, num_channels=39, labels_shape=[], labels_dtype=tf.str
 
 def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
     batch_size=8, num_epochs=1, num_parallel_calls=32, is_infer=False,
-    binary_targets=False, labels_shape=[]):
+    binary_targets=False, labels_shape=[], max_frames=-1, max_symbols=-1):
 
     try:
         use_labels = len(dataset.output_classes) == 2
@@ -65,11 +65,16 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
     else:
         output_buffer_size = batch_size * 1000
 
+        if max_frames > 0:
+            dataset = dataset.filter(
+                lambda inputs, labels: tf.logical_and(tf.shape(inputs)[0] <= max_frames,
+                                                      tf.shape(labels)[0] <= max_symbols))
+
         if not binary_targets:
             sos_id = tf.cast(vocab_table.lookup(tf.constant(sos)), tf.int32)
             eos_id = tf.cast(vocab_table.lookup(tf.constant(eos)), tf.int32)
 
-        dataset = dataset.repeat(num_epochs)
+        dataset = dataset.repeat(num_epochs if num_epochs > 0 else None)
 
         if not is_infer:
             dataset = dataset.shuffle(output_buffer_size)
@@ -132,9 +137,23 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                     'target_sequence_length': target_sequence_length
                 }))
 
+        if max_frames > 0:
+            padded_shapes = (
+                {
+                    'encoder_inputs': tf.TensorShape([max_frames, dataset.output_shapes[0]['encoder_inputs'][1].value]),
+                    'source_sequence_length': dataset.output_shapes[0]['source_sequence_length']
+                },
+                {
+                    'targets_inputs': tf.TensorShape([max_symbols]),
+                    'targets_outputs': tf.TensorShape([max_symbols]),
+                    'target_sequence_length': dataset.output_shapes[1]['target_sequence_length'],
+                }
+            )
+        else:
+            padded_shapes = dataset.output_shapes
         dataset = dataset.padded_batch(
             batch_size,
-            padded_shapes=dataset.output_shapes,
+            padded_shapes=padded_shapes,
             padding_values=(
                 {
                     'encoder_inputs': 0.0,
@@ -145,6 +164,6 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                     'targets_outputs': 0 if binary_targets else eos_id,
                     'target_sequence_length': 0,
                 }),
-        drop_remainder=True)
+            drop_remainder=True)
 
     return dataset
