@@ -1,9 +1,13 @@
 import tensorflow as tf
+from tensorflow.python.framework import ops
+from tensorflow.python.ops import control_flow_ops
+from tensorflow.python.ops import math_ops
 import tensorflow.contrib as tf_contrib
 
 __all__ = [
     'TrainingSigmoidHelper',
     'ScheduledSigmoidHelper',
+    'TPUScheduledEmbeddingTrainingHelper',
     'DenseBinfDecoder',
     'transform_binf_to_phones'
 ]
@@ -38,6 +42,37 @@ class TrainingSigmoidHelper(tf_contrib.seq2seq.TrainingHelper):
                 sample_ids = tf.round(tf.sigmoid(outputs))
                 # sample_ids = tf.sigmoid(outputs) #TODO: experiment with non-binarlized outputs
             return sample_ids
+
+
+class TPUScheduledEmbeddingTrainingHelper(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper):
+    def __init__(self, inputs, sequence_length, embedding, sampling_probability,
+                 time_major=False, seed=None, scheduling_seed=None, name=None):
+        super().__init__(inputs, sequence_length, embedding, sampling_probability,
+                         time_major, seed, scheduling_seed, name)
+
+    def next_inputs(self, time, outputs, state, sample_ids, name=None):
+        with ops.name_scope(name, "ScheduledEmbeddingTrainingHelperNextInputs",
+                            [time, outputs, state, sample_ids]):
+            (finished, base_next_inputs, state) = (
+                super(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper, self).next_inputs(
+                    time=time,
+                    outputs=outputs,
+                    state=state,
+                    sample_ids=sample_ids,
+                    name=name))
+
+            def maybe_sample():
+                """Perform scheduled sampling."""
+                sampling_mask = math_ops.cast(sample_ids > -1, base_next_inputs.dtype)
+                sampling_mask = tf.expand_dims(sampling_mask, axis=-1)
+                outputs_sampled = self._embedding_fn(sample_ids)
+                outputs = sampling_mask * outputs_sampled + (1 - sampling_mask) * base_next_inputs
+                return outputs
+
+            all_finished = math_ops.reduce_all(finished)
+            next_inputs = control_flow_ops.cond(
+                all_finished, lambda: base_next_inputs, maybe_sample)
+            return finished, next_inputs, state
 
 
 class ScheduledSigmoidHelper(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper):

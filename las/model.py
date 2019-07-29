@@ -5,7 +5,7 @@ from tensorflow.python.util import nest
 
 from las.ops import lstm_cell
 from las.ops import pyramidal_bilstm
-from utils import TrainingSigmoidHelper, ScheduledSigmoidHelper, DenseBinfDecoder
+from utils import TrainingSigmoidHelper, ScheduledSigmoidHelper, DenseBinfDecoder, TPUScheduledEmbeddingTrainingHelper
 
 __all__ = [
     'listener',
@@ -271,7 +271,7 @@ def speller(encoder_outputs,
                 helper = ScheduledSigmoidHelper(decoder_inputs, target_sequence_length,
                     embedding_fn, hparams.sampling_probability, binf_to_ipa=binf_embedding)
             else:
-                helper = tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper(
+                helper = TPUScheduledEmbeddingTrainingHelper(
                     decoder_inputs, target_sequence_length,
                     embedding_fn, hparams.sampling_probability)
         else:
