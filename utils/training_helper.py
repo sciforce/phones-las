@@ -75,7 +75,7 @@ class TPUScheduledEmbeddingTrainingHelper(tf_contrib.seq2seq.ScheduledEmbeddingT
             return finished, next_inputs, state
 
 
-class ScheduledSigmoidHelper(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper):
+class ScheduledSigmoidHelper(TPUScheduledEmbeddingTrainingHelper):
     def __init__(self, inputs, sequence_length, embedding, sampling_probability,
                  time_major=False, seed=None, scheduling_seed=None, name=None,
                  binf_to_ipa=None):
