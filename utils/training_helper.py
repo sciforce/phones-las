@@ -108,7 +108,7 @@ class ScheduledSigmoidHelper(TPUScheduledEmbeddingTrainingHelper):
             tf.fill(tf.shape(outputs), -1.0))
 
 
-class DenseBinfDecoder(tf.layers.Dense):
+class DenseBinfDecoder(tf.compat.v1.layers.Dense):
     '''
     Fully connected layer modification, which transforms
     original layer's outputs, assumed to be binary features logits,

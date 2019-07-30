@@ -39,10 +39,10 @@ class AttentionMultiCell(tf.nn.rnn_cell.MultiRNNCell):
                 "Expected state to be a tuple of length %d, but received: %s"
                 % (len(self.state_size), state))
 
-        with tf.variable_scope(scope or "multi_rnn_cell"):
+        with tf.compat.v1.variable_scope(scope or "multi_rnn_cell"):
             new_states = []
 
-            with tf.variable_scope("cell_0_attention"):
+            with tf.compat.v1.variable_scope("cell_0_attention"):
                 attention_cell = self._cells[0]
                 attention_state = state[0]
                 cur_inp, new_attention_state = attention_cell(
@@ -50,7 +50,7 @@ class AttentionMultiCell(tf.nn.rnn_cell.MultiRNNCell):
                 new_states.append(new_attention_state)
 
             for i in range(1, len(self._cells)):
-                with tf.variable_scope("cell_%d" % i):
+                with tf.compat.v1.variable_scope("cell_%d" % i):
 
                     cell = self._cells[i]
                     cur_state = state[i]
@@ -110,12 +110,12 @@ def listener(encoder_inputs,
     else:
         forward_cell_list, backward_cell_list = [], []
         for layer in range(hparams.num_layers):
-            with tf.variable_scope('fw_cell_{}'.format(layer)):
+            with tf.compat.v1.variable_scope('fw_cell_{}'.format(layer)):
                 cell = lstm_cell(hparams.num_units, hparams.dropout, mode)
 
             forward_cell_list.append(cell)
             if not hparams.unidirectional:
-                with tf.variable_scope('bw_cell_{}'.format(layer)):
+                with tf.compat.v1.variable_scope('bw_cell_{}'.format(layer)):
                     cell = lstm_cell(hparams.num_units, hparams.dropout, mode)
 
                 backward_cell_list.append(cell)
@@ -169,7 +169,7 @@ def attend(encoder_outputs,
 
     cell_list = []
     for layer in range(hparams.num_layers):
-        with tf.variable_scope('decoder_cell_'.format(layer)):
+        with tf.compat.v1.variable_scope('decoder_cell_'.format(layer)):
             cell = lstm_cell(hparams.num_units, hparams.dropout, mode)
 
         cell_list.append(cell)
@@ -260,8 +260,8 @@ def speller(encoder_outputs,
     maximum_iterations = hparams.max_symbols if hparams.max_symbols > 0 else None
     if mode != tf.estimator.ModeKeys.TRAIN:
         max_source_length = tf.reduce_max(source_sequence_length)
-        maximum_iterations = tf.to_int32(tf.round(tf.to_float(
-            max_source_length) * hparams.decoding_length_factor))
+        maximum_iterations = tf.cast(tf.round(tf.cast(
+            max_source_length, tf.float32) * hparams.decoding_length_factor), tf.int32)
 
     if mode == tf.estimator.ModeKeys.TRAIN:
         decoder_inputs = embedding_fn(decoder_inputs)

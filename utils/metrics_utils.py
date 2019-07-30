@@ -16,7 +16,7 @@ def dense_to_sparse(tensor, eos_id, merge_repeated=True):
 
         # trim after first eos token
         eos_indices = tf.where(tf.equal(concat_tensor, eos_id))
-        first_eos = tf.segment_min(eos_indices[:, 1], eos_indices[:, 0])
+        first_eos = tf.math.segment_min(eos_indices[:, 1], eos_indices[:, 0])
         mask = tf.sequence_mask(first_eos, maxlen=tf.shape(tensor)[1])
 
         indices = tf.where(diff & mask & tf.not_equal(tensor, -1))

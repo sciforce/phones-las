@@ -82,7 +82,7 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 
     dataset = utils.process_dataset(
         dataset, vocab_table, sos, eos, means, stds, batch_size, 1,
-        binary_targets=binary_targets, labels_shape=labels_shape, is_infer=True)
+        binary_targets=binary_targets, is_infer=True)
 
     if args.take > 0:
         dataset = dataset.take(take)

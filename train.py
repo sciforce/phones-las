@@ -104,7 +104,7 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
     labels_shape = [] if not binary_targets else len(binf2phone.index)
     labels_dtype = tf.string if not binary_targets else tf.float32
     dataset = utils.read_dataset(dataset_filename, num_channels, labels_shape=labels_shape,
-        labels_dtype=labels_dtype)
+                                 labels_dtype=labels_dtype)
     vocab_table = utils.create_vocab_table(vocab_filename)
 
     if norm_filename is not None:
@@ -117,7 +117,7 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 
     dataset = utils.process_dataset(
         dataset, vocab_table, sos, eos, means, stds, batch_size, num_epochs,
-        binary_targets=binary_targets, labels_shape=labels_shape, num_parallel_calls=num_parallel_calls,
+        binary_targets=binary_targets, num_parallel_calls=num_parallel_calls,
         max_frames=max_frames, max_symbols=max_symbols
     )
 

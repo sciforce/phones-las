@@ -177,15 +177,15 @@ def las_model_fn(features,
             targets_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), targets)
             decoder_inputs_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), decoder_inputs)
 
-    tf.logging.info('Building listener')
-    with tf.variable_scope('listener'):
+    tf.compat.v1.logging.info('Building listener')
+    with tf.compat.v1.variable_scope('listener'):
         (encoder_outputs, source_sequence_length), encoder_state = las.model.listener(
             encoder_inputs, source_sequence_length, mode, params.encoder)
 
-    tf.logging.info('Building speller')
+    tf.compat.v1.logging.info('Building speller')
     decoder_outputs, final_context_state, final_sequence_length = None, None, None
     if not params.decoder.binary_outputs or params.decoder.multitask:
-        with tf.variable_scope('speller'):
+        with tf.compat.v1.variable_scope('speller'):
             decoder_outputs, final_context_state, final_sequence_length = las.model.speller(
                 encoder_outputs, encoder_state, decoder_inputs,
                 source_sequence_length, target_sequence_length,
@@ -193,7 +193,7 @@ def las_model_fn(features,
 
     decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = None, None, None
     if params.decoder.binary_outputs:
-        with tf.variable_scope('speller_binf'):
+        with tf.compat.v1.variable_scope('speller_binf'):
             decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = las.model.speller(
                 encoder_outputs, encoder_state, decoder_inputs_binf if not params.decoder.binf_projection else decoder_inputs,
                 source_sequence_length, target_sequence_length,
@@ -260,16 +260,17 @@ def las_model_fn(features,
             edit_distance_binf = utils.edit_distance(
                 sample_ids_phones_binf, targets, utils.EOS_ID, params.mapping if mapping is None else None)
         metrics = {
-            'edit_distance': tf.metrics.mean(edit_distance if edit_distance is not None else edit_distance_binf),
+            'edit_distance': tf.compat.v1.metrics.mean(edit_distance
+                                                       if edit_distance is not None else edit_distance_binf),
         }
 
     # In TRAIN model this becomes an significantly affected by early high values.
     # As a result in summaries train values would be high and drop after restart.
     # To prevent this, we use last batch average in case of TRAIN.
     if mode != tf.estimator.ModeKeys.TRAIN:
-        tf.summary.scalar('edit_distance', metrics['edit_distance'][1])
+        tf.compat.v1.summary.scalar('edit_distance', metrics['edit_distance'][1])
     elif not params.tpu_name:
-        tf.summary.scalar('edit_distance', tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf))
+        tf.compat.v1.summary.scalar('edit_distance', tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf))
 
     audio_loss_ipa, audio_loss_binf = None, None
     if logits is not None:
@@ -295,7 +296,7 @@ def las_model_fn(features,
         audio_loss += audio_loss_ipa
     if audio_loss_binf is not None:
         audio_loss += audio_loss_binf
-        tf.summary.scalar('audio_loss_binf', audio_loss_binf)
+        tf.compat.v1.summary.scalar('audio_loss_binf', audio_loss_binf)
 
     ctc_edit_distance = None
     if params.ctc_weight > 0:
@@ -309,15 +310,15 @@ def las_model_fn(features,
                                          label_length=target_sequence_length, logit_length=source_sequence_length)
             ctc_loss = tf.reduce_mean(ctc_loss, name='ctc_phone_loss')
             audio_loss += ctc_loss * params.ctc_weight
-            tf.summary.scalar('ctc_loss', ctc_loss)
+            tf.compat.v1.summary.scalar('ctc_loss', ctc_loss)
             with tf.name_scope('ctc_metrics'):
                 ctc_edit_distance = utils.edit_distance(
                     decoded_ctc, targets, utils.EOS_ID, params.mapping if mapping is None else None)
-                metrics['ctc_edit_distance'] = tf.metrics.mean(ctc_edit_distance)
+                metrics['ctc_edit_distance'] = tf.compat.v1.metrics.mean(ctc_edit_distance)
             if mode != tf.estimator.ModeKeys.TRAIN:
-                tf.summary.scalar('ctc_edit_distance', metrics['ctc_edit_distance'][1])
+                tf.compat.v1.summary.scalar('ctc_edit_distance', metrics['ctc_edit_distance'][1])
             else:
-                tf.summary.scalar('ctc_edit_distance', tf.reduce_mean(ctc_edit_distance))
+                tf.compat.v1.summary.scalar('ctc_edit_distance', tf.reduce_mean(ctc_edit_distance))
 
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('alignment'):
@@ -328,9 +329,8 @@ def las_model_fn(features,
         if run_name != 'eval':
             # For other summaries eval is automatically added.
             run_name = 'eval_{}'.format(run_name)
-        attention_summary = tf.summary.image(
-            'attention_images', attention_images)
-        eval_summary_hook = tf.train.SummarySaverHook(
+        attention_summary = tf.compat.v1.summary.image('attention_images', attention_images)
+        eval_summary_hook = tf.estimator.SummarySaverHook(
             save_steps=20,
             output_dir=os.path.join(config.model_dir, run_name),
             summary_op=attention_summary)
@@ -341,7 +341,7 @@ def las_model_fn(features,
             'max_edit_distance': tf.reduce_max(edit_distance if edit_distance is not None else edit_distance_binf),
             'min_edit_distance': tf.reduce_min(edit_distance if edit_distance is not None else edit_distance_binf)
         }
-        logging_hook = tf.train.LoggingTensorHook(log_data, every_n_iter=20)
+        logging_hook = tf.estimator.LoggingTensorHook(log_data, every_n_iter=20)
         hooks += [logging_hook]
 
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics,
@@ -353,7 +353,7 @@ def las_model_fn(features,
             optimizer = tf.tpu.CrossShardOptimizer(optimizer)
         var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
         total_params = np.sum([np.prod(x.shape.as_list()) for x in var_list])
-        tf.logging.info('Trainable parameters: {}'.format(total_params))
+        tf.compat.v1.logging.info('Trainable parameters: {}'.format(total_params))
 
         regularizer = tf_contrib.layers.l2_regularizer(params.l2_reg_scale)
         reg_term = tf.contrib.layers.apply_regularization(regularizer, var_list)
@@ -383,7 +383,7 @@ def las_model_fn(features,
                       'edit_distance': tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf)}
     if ctc_edit_distance is not None:
         train_log_data['ctc_edit_distance'] = tf.reduce_mean(ctc_edit_distance)
-    logging_hook = tf.train.LoggingTensorHook(train_log_data, every_n_iter=10)
+    logging_hook = tf.estimator.LoggingTensorHook(train_log_data, every_n_iter=10)
 
     if not params.tpu_name:
         return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])

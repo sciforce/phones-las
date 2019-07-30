@@ -32,7 +32,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=39, batch_size=8, take=0,
+def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=39, batch_size=8,
     binf2phone=None):
     binary_targets = binf2phone is not None
     labels_shape = [] if not binary_targets else len(binf2phone.index)
@@ -51,7 +51,7 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
 
     dataset = utils.process_dataset(
         dataset, vocab_table, sos, eos, means, stds, batch_size, 1,
-        binary_targets=binary_targets, labels_shape=labels_shape)
+        binary_targets=binary_targets)
 
     return dataset
 
@@ -63,7 +63,6 @@ def main(args):
 
     vocab_list = utils.load_vocab(args.vocab)
     binf2phone_np = None
-    binf2phone = None
     if hparams.decoder.binary_outputs:
         binf2phone = utils.load_binf2phone(args.binf_map, vocab_list)
         binf2phone_np = binf2phone.values
@@ -78,13 +77,13 @@ def main(args):
         config=config,
         params=hparams)
 
-    tf.logging.info('Evaluating on {}'.format(eval_name))
+    tf.compat.v1.logging.info('Evaluating on {}'.format(eval_name))
     model.evaluate(lambda: input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels,
             batch_size=args.batch_size, binf2phone=None), name=eval_name)
 
 
 if __name__ == '__main__':
-    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
     args = parse_args()
     main(args)

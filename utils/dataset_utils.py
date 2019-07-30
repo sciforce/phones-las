@@ -7,17 +7,19 @@ __all__ = [
 ]
 
 
-def read_dataset(filename, num_channels=39, labels_shape=[], labels_dtype=tf.string):
+def read_dataset(filename, num_channels=39, labels_shape=None, labels_dtype=tf.string):
     """Read data from tfrecord file."""
+    if labels_shape is None:
+        labels_shape = []
 
     def parse_fn(example_proto):
         """Parse function for reading single sequence example."""
         sequence_features = {
-            'inputs': tf.FixedLenSequenceFeature(shape=[num_channels], dtype=tf.float32),
-            'labels': tf.FixedLenSequenceFeature(labels_shape, labels_dtype)
+            'inputs': tf.io.FixedLenSequenceFeature(shape=[num_channels], dtype=tf.float32),
+            'labels': tf.io.FixedLenSequenceFeature(labels_shape, labels_dtype)
         }
 
-        context, sequence = tf.parse_single_sequence_example(
+        context, sequence = tf.io.parse_single_sequence_example(
             serialized=example_proto,
             sequence_features=sequence_features
         )
@@ -35,16 +37,17 @@ def read_dataset(filename, num_channels=39, labels_shape=[], labels_dtype=tf.str
 
 def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
     batch_size=8, num_epochs=1, num_parallel_calls=32, is_infer=False,
-    binary_targets=False, labels_shape=[], max_frames=-1, max_symbols=-1):
+    binary_targets=False, max_frames=-1, max_symbols=-1):
 
+    eos_id = None
     try:
-        use_labels = len(dataset.output_classes) == 2
+        use_labels = len(tf.compat.v1.data.get_output_shapes(dataset)) == 2
     except TypeError:
         use_labels = False
 
     if not use_labels:
         if means is not None and stds is not None:
-            tf.logging.info('Applying normalization.')
+            tf.compat.v1.logging.info('Applying normalization.')
             means_const = tf.constant(means, dtype=tf.float32)
             stds_const = tf.constant(stds, dtype=tf.float32)
             dataset = dataset.map(
@@ -56,7 +59,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
         })
         dataset = dataset.padded_batch(
             batch_size,
-            padded_shapes=dataset.output_shapes,
+            padded_shapes=tf.compat.v1.data.get_output_shapes(dataset),
             padding_values={
                     'encoder_inputs': 0.0,
                     'source_sequence_length': 0,
@@ -86,7 +89,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                 num_parallel_calls=num_parallel_calls)
 
         if means is not None and stds is not None:
-            tf.logging.info('Applying normalization.')
+            tf.compat.v1.logging.info('Applying normalization.')
             means_const = tf.constant(means, dtype=tf.float32)
             stds_const = tf.constant(stds, dtype=tf.float32)
             dataset = dataset.map(
@@ -107,7 +110,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                 lambda inputs, labels: (inputs,
                                         tf.concat((sos_id, labels), 0),
                                         tf.concat((labels, eos_id), 0),
-                                    ),
+                                        ),
                 num_parallel_calls=num_parallel_calls)
         else:
             dataset = dataset.map(
@@ -118,15 +121,15 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
 
         dataset = dataset.map(
             lambda inputs, labels_in, labels_out: (inputs,
-                                                labels_in,
-                                                labels_out,
-                                                tf.shape(inputs)[0],
-                                                tf.shape(labels_in)[0] if binary_targets else tf.size(labels_in)),
+                                                   labels_in,
+                                                   labels_out,
+                                                   tf.shape(inputs)[0],
+                                                   tf.shape(labels_in)[0] if binary_targets else tf.size(labels_in)),
             num_parallel_calls=num_parallel_calls)
 
         dataset = dataset.map(
             lambda inputs, labels_in, labels_out,
-            source_sequence_length, target_sequence_length: (
+                   source_sequence_length, target_sequence_length: (
                 {
                     'encoder_inputs': inputs,
                     'source_sequence_length': source_sequence_length,
@@ -137,23 +140,23 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                     'target_sequence_length': target_sequence_length
                 }))
 
+        out_shapes = tf.compat.v1.data.get_output_shapes(dataset)
         if max_frames > 0:
             padded_shapes = (
                 {
-                    'encoder_inputs': tf.TensorShape([max_frames, dataset.output_shapes[0]['encoder_inputs'][1].value]),
-                    'source_sequence_length': dataset.output_shapes[0]['source_sequence_length']
+                    'encoder_inputs': tf.TensorShape([max_frames, out_shapes[0]['encoder_inputs'][1].value]),
+                    'source_sequence_length': out_shapes[0]['source_sequence_length']
                 },
                 {
                     'targets_inputs': tf.TensorShape([max_symbols]),
                     'targets_outputs': tf.TensorShape([max_symbols]),
-                    'target_sequence_length': dataset.output_shapes[1]['target_sequence_length'],
+                    'target_sequence_length': out_shapes[1]['target_sequence_length'],
                 }
             )
         else:
-            padded_shapes = dataset.output_shapes
+            padded_shapes = out_shapes
         dataset = dataset.padded_batch(
-            batch_size,
-            padded_shapes=padded_shapes,
+            batch_size, padded_shapes=padded_shapes,
             padding_values=(
                 {
                     'encoder_inputs': 0.0,
