@@ -160,7 +160,11 @@ def las_model_fn(features,
     targets_binf = None
     binf_embedding = None
     if binf2phone is not None and params.decoder.binary_outputs:
-        binf_embedding = tf.constant(binf2phone, dtype=tf.float32, name='binf2phone')
+        if params.decoder.binf_trainable:
+            binf_embedding = tf.get_variable('binf2phone', shape=binf2phone.shape, dtype=tf.float32,
+                initializer=tf.random_uniform_initializer(minval=0., maxval=1.))
+        else:
+            binf_embedding = tf.constant(binf2phone, dtype=tf.float32, name='binf2phone')
 
     mapping = None
     if params.mapping and binf_embedding is not None:
@@ -335,6 +339,16 @@ def las_model_fn(features,
             output_dir=os.path.join(config.model_dir, run_name),
             summary_op=attention_summary)
         hooks = [eval_summary_hook]
+        if binf_embedding is not None:
+            with tf.name_scope('binf_image'):
+                binf_image = tf.tile(binf_embedding[None, :, :, None], [tf.shape(encoder_inputs)[0], 1, 1, 1])
+            binf_summary = tf.summary.image('binf_image', binf_image)
+            binf_hook = tf.train.SummarySaverHook(
+                save_steps=20,
+                output_dir=os.path.join(config.model_dir, run_name),
+                summary_op=binf_summary
+            )
+            hooks.append(binf_hook)
         loss = audio_loss
         log_data = {
             'edit_distance': tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf),

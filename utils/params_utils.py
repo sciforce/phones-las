@@ -62,6 +62,7 @@ def get_default_hparams():
         binary_outputs=False,
         binf_sampling=False,
         binf_projection=False,
+        binf_trainable=False,
         multitask=False,
         # evaluation setting
         mapping=None)
@@ -125,6 +126,7 @@ def get_encoder_decoder_hparams(hparams):
     binary_outputs = hparams.pop_hparam('binary_outputs')
     binf_sampling = hparams.pop_hparam('binf_sampling')
     binf_projection = hparams.pop_hparam('binf_projection')
+    binf_trainable = hparams.pop_hparam('binf_trainable')
     multitask = hparams.pop_hparam('multitask')
 
     encoder_hparams = HParams(
@@ -142,7 +144,8 @@ def get_encoder_decoder_hparams(hparams):
         binf_sampling=binf_sampling,
         binf_projection=binf_projection,
         max_symbols=max_symbols,
-        multitask=multitask)
+        multitask=multitask,
+        binf_trainable=binf_trainable)
 
     for name, value in hparams.values().items():
         decoder_hparams.add_hparam(name, value)

@@ -31,31 +31,6 @@ def parse_args():
 
     return parser.parse_args()
 
-
-def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=39, batch_size=8, take=0,
-    binf2phone=None):
-    binary_targets = binf2phone is not None
-    labels_shape = [] if not binary_targets else len(binf2phone.index)
-    labels_dtype = tf.string if not binary_targets else tf.float32
-    dataset = utils.read_dataset(dataset_filename, num_channels, labels_shape=labels_shape,
-        labels_dtype=labels_dtype)
-    vocab_table = utils.create_vocab_table(vocab_filename)
-
-    if norm_filename is not None:
-        means, stds = utils.load_normalization(args.norm)
-    else:
-        means = stds = None
-
-    sos = binf2phone[utils.SOS].values if binary_targets else utils.SOS
-    eos = binf2phone[utils.EOS].values if binary_targets else utils.EOS
-
-    dataset = utils.process_dataset(
-        dataset, vocab_table, sos, eos, means, stds, batch_size, 1,
-        binary_targets=binary_targets, labels_shape=labels_shape)
-
-    return dataset
-
-
 def main(args):
     eval_name = str(os.path.basename(args.data).split('.')[0])
     config = tf.estimator.RunConfig(model_dir=args.model_dir)
@@ -79,9 +54,9 @@ def main(args):
         params=hparams)
 
     tf.logging.info('Evaluating on {}'.format(eval_name))
-    model.evaluate(lambda: input_fn(
+    model.evaluate(lambda: utils.input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels,
-            batch_size=args.batch_size, binf2phone=None), name=eval_name)
+            batch_size=args.batch_size), name=eval_name)
 
 
 if __name__ == '__main__':
