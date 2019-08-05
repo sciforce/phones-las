@@ -2,6 +2,7 @@ import argparse
 import tensorflow as tf
 import multiprocessing
 import os
+from tensor2tensor.data_generators.text_encoder import PAD_ID, EOS_ID
 
 import utils
 
@@ -134,7 +135,8 @@ def main(args):
     else:
         config = tf.estimator.RunConfig(model_dir=args.model_dir)
     hparams = utils.create_hparams(
-        args, vocab_size, binf_count, utils.SOS_ID, utils.EOS_ID)
+        args, vocab_size, binf_count, utils.SOS_ID if not args.t2t_format else PAD_ID,
+        utils.EOS_ID if not args.t2t_format else EOS_ID)
     if mapping is not None:
         hparams.del_hparam('mapping')
         hparams.add_hparam('mapping', mapping)
@@ -160,7 +162,7 @@ def main(args):
         if args.t2t_format:
             return lambda params: utils.input_fn_t2t(args.train, mode, hparams,
                 batch_size=params.batch_size if 'batch_size' in params else args.batch_size,
-                num_epochs=args.num_epochs,
+                num_epochs=args.num_epochs if mode == tf.estimator.ModeKeys.TRAIN else 1,
                 num_parallel_calls=64 if args.tpu_name and args.tpu_name != 'fake' else args.num_parallel_calls,
                 max_frames=args.max_frames, max_symbols=args.max_symbols)
         else:
