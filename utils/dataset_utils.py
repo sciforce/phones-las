@@ -50,8 +50,8 @@ def process_dataset_t2t_format(dataset, sos_id, eos_id,
 
     dataset = dataset.map(
         lambda inputs, labels: (inputs,
-                                tf.concat(([sos_id], labels), 0),
-                                tf.concat((labels, [eos_id]), 0)),
+                                tf.concat(([sos_id], labels[:-1]), 0),
+                                labels),
         num_parallel_calls=num_parallel_calls)
 
     dataset = dataset.map(

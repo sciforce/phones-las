@@ -17,7 +17,7 @@ GRAD_NORM = 2
 NOISE_MEAN = 0.0
 
 
-def compute_loss(logits, targets, final_sequence_length, target_sequence_length, mode):
+def compute_loss(logits, targets, final_sequence_length, target_sequence_length, mode, eos_id):
 
     assert mode != tf.estimator.ModeKeys.PREDICT
 
@@ -61,7 +61,7 @@ def compute_loss(logits, targets, final_sequence_length, target_sequence_length,
 
         # pad EOS to make targets and logits have same shape
         targets = tf.pad(targets, [[0, 0], [0, tf.maximum(
-            0, max_sequence_length - tf.shape(targets)[1])]], constant_values=utils.EOS_ID)
+            0, max_sequence_length - tf.shape(targets)[1])]], constant_values=eos_id)
         logits = tf.pad(logits, [[0, 0], [0, tf.maximum(
             0, max_sequence_length - tf.shape(logits)[1])], [0, 0]], constant_values=0)
 
@@ -259,10 +259,10 @@ def las_model_fn(features,
     with tf.name_scope('metrics'):
         if sample_ids_phones is not None:
             edit_distance = utils.edit_distance(
-                sample_ids_phones, targets, utils.EOS_ID, params.mapping if mapping is None else None)
+                sample_ids_phones, targets, params.decoder.eos_id, params.mapping if mapping is None else None)
         if sample_ids_phones_binf is not None:
             edit_distance_binf = utils.edit_distance(
-                sample_ids_phones_binf, targets, utils.EOS_ID, params.mapping if mapping is None else None)
+                sample_ids_phones_binf, targets, params.decoder.eos_id, params.mapping if mapping is None else None)
         metrics = {
             'edit_distance': tf.metrics.mean(edit_distance if edit_distance is not None else edit_distance_binf),
         }
@@ -279,13 +279,13 @@ def las_model_fn(features,
     if logits is not None:
         with tf.name_scope('cross_entropy'):
             audio_loss_ipa = compute_loss(
-                logits, targets, final_sequence_length, target_sequence_length, mode)
+                logits, targets, final_sequence_length, target_sequence_length, mode, params.decoder.eos_id)
 
     if logits_binf is not None:
         with tf.name_scope('cross_entropy_binf'):
             if params.decoder.binf_projection:
                 audio_loss_binf = compute_loss(
-                    logits_binf, targets, final_sequence_length_binf, target_sequence_length, mode)
+                    logits_binf, targets, final_sequence_length_binf, target_sequence_length, mode, params.decoder.eos_id)
             else:
                 if mode == tf.estimator.ModeKeys.TRAIN:
                     audio_loss_binf = compute_loss_sigmoid(logits_binf, targets_binf,
@@ -316,7 +316,7 @@ def las_model_fn(features,
             tf.summary.scalar('ctc_loss', ctc_loss)
             with tf.name_scope('ctc_metrics'):
                 ctc_edit_distance = utils.edit_distance(
-                    decoded_ctc, targets, utils.EOS_ID, params.mapping if mapping is None else None)
+                    decoded_ctc, targets, params.decoder.eos_id, params.mapping if mapping is None else None)
                 metrics['ctc_edit_distance'] = tf.metrics.mean(ctc_edit_distance)
             if mode != tf.estimator.ModeKeys.TRAIN:
                 tf.summary.scalar('ctc_edit_distance', metrics['ctc_edit_distance'][1])
