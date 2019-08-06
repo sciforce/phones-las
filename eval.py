@@ -13,10 +13,14 @@ def parse_args():
 
     parser.add_argument('--data', type=str,
                         help='data in TFRecord format')
-    parser.add_argument('--vocab', type=str, required=True,
+    parser.add_argument('--vocab', type=str,
                         help='vocabulary table, listing vocabulary line by line')
     parser.add_argument('--norm', type=str, default=None,
                         help='normalization params')
+    parser.add_argument('--t2t_format', action='store_true',
+                        help='Use dataset in the format of ASR problems of Tensor2Tensor framework. --train param should be directory')
+    parser.add_argument('--t2t_problem_name', type=str,
+                        help='Problem name for data in T2T format.')
     parser.add_argument('--mapping', type=str,
                         help='additional mapping when evaluation')
     parser.add_argument('--model_dir', type=str, required=True,
@@ -31,37 +35,13 @@ def parse_args():
 
     return parser.parse_args()
 
-
-def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=39, batch_size=8, take=0,
-    binf2phone=None):
-    binary_targets = binf2phone is not None
-    labels_shape = [] if not binary_targets else len(binf2phone.index)
-    labels_dtype = tf.string if not binary_targets else tf.float32
-    dataset = utils.read_dataset(dataset_filename, num_channels, labels_shape=labels_shape,
-        labels_dtype=labels_dtype)
-    vocab_table = utils.create_vocab_table(vocab_filename)
-
-    if norm_filename is not None:
-        means, stds = utils.load_normalization(args.norm)
-    else:
-        means = stds = None
-
-    sos = binf2phone[utils.SOS].values if binary_targets else utils.SOS
-    eos = binf2phone[utils.EOS].values if binary_targets else utils.EOS
-
-    dataset = utils.process_dataset(
-        dataset, vocab_table, sos, eos, means, stds, batch_size, 1,
-        binary_targets=binary_targets, labels_shape=labels_shape)
-
-    return dataset
-
-
 def main(args):
     eval_name = str(os.path.basename(args.data).split('.')[0])
     config = tf.estimator.RunConfig(model_dir=args.model_dir)
     hparams = utils.create_hparams(args)
 
-    vocab_list = utils.load_vocab(args.vocab)
+    vocab_name = args.vocab if not args.t2t_format else os.path.join(args.data, 'vocab.txt')
+    vocab_list = utils.load_vocab(vocab_name)
     binf2phone_np = None
     binf2phone = None
     if hparams.decoder.binary_outputs:
@@ -79,9 +59,15 @@ def main(args):
         params=hparams)
 
     tf.logging.info('Evaluating on {}'.format(eval_name))
-    model.evaluate(lambda: input_fn(
+    if args.t2t_format:
+        input_fn = lambda: utils.input_fn_t2t(
+            args.data, tf.estimator.ModeKeys.EVAL, hparams,
+            args.t2t_problem_name, batch_size=args.batch_size)
+    else:
+        input_fn = lambda: utils.input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels,
-            batch_size=args.batch_size, binf2phone=None), name=eval_name)
+            batch_size=args.batch_size)
+    model.evaluate(input_fn, name=eval_name)
 
 
 if __name__ == '__main__':

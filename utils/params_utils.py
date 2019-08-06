@@ -1,5 +1,6 @@
 import os
 import json
+import tensorflow as tf
 import tensorflow.contrib as tf_contrib
 
 __all__ = [
@@ -21,7 +22,7 @@ class HParams(tf_contrib.training.HParams):
         return value
 
     def save_to_file(self, filename):
-        with open(filename, 'w') as f:
+        with tf.io.gfile.GFile(filename, 'w') as f:
             json.dump(self.to_json(), f)
 
 
@@ -62,6 +63,7 @@ def get_default_hparams():
         binary_outputs=False,
         binf_sampling=False,
         binf_projection=False,
+        binf_trainable=False,
         multitask=False,
         # evaluation setting
         mapping=None)
@@ -77,8 +79,8 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
         is_reset = args.reset
     except AttributeError:
         is_reset = False
-    if os.path.exists(hparams_file) and not is_reset:
-        with open(hparams_file, 'r') as f:
+    if tf.io.gfile.exists(hparams_file) and not is_reset:
+        with tf.io.gfile.GFile(hparams_file, 'r') as f:
             hparams_dict = json.loads(json.load(f))
 
         for name, value in vars(args).items():
@@ -98,14 +100,14 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
         if value is not None:
             if name == 'mapping':
                 if not isinstance(value, list):
-                    value = [int(x.strip()) for x in open(value, 'r')]
+                    value = [int(x.strip()) for x in tf.io.gfile.GFile(value, 'r')]
                 hparams.del_hparam(name)
                 hparams.add_hparam(name, value)
             else:
                 hparams.set_hparam(name, value)
 
-    if not os.path.exists(args.model_dir):
-        os.makedirs(args.model_dir)
+    if not tf.io.gfile.exists(args.model_dir):
+        tf.io.gfile.mkdir(args.model_dir)
     hparams.save_to_file(hparams_file)
 
     return get_encoder_decoder_hparams(hparams)
@@ -125,6 +127,7 @@ def get_encoder_decoder_hparams(hparams):
     binary_outputs = hparams.pop_hparam('binary_outputs')
     binf_sampling = hparams.pop_hparam('binf_sampling')
     binf_projection = hparams.pop_hparam('binf_projection')
+    binf_trainable = hparams.pop_hparam('binf_trainable')
     multitask = hparams.pop_hparam('multitask')
 
     encoder_hparams = HParams(
@@ -142,7 +145,8 @@ def get_encoder_decoder_hparams(hparams):
         binf_sampling=binf_sampling,
         binf_projection=binf_projection,
         max_symbols=max_symbols,
-        multitask=multitask)
+        multitask=multitask,
+        binf_trainable=binf_trainable)
 
     for name, value in hparams.values().items():
         decoder_hparams.add_hparam(name, value)

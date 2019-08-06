@@ -23,11 +23,11 @@ EOS_ID = 2
 
 def load_vocab(filename):
     if not '.pickle' in filename:
-        with tf.gfile.Open(filename, 'r') as f:
+        with tf.io.gfile.GFile(filename, 'r') as f:
             vocab_list = [vocab.strip('\r\n') for vocab in f]
             vocab_list = [UNK, SOS, EOS] + vocab_list
     else:
-        with tf.gfile.Open(filename, 'rb') as f:
+        with tf.io.gfile.GFile(filename, 'rb') as f:
             vocab_list = pickle.load(f)
             vocab_list = [UNK, SOS, EOS] + vocab_list
 
