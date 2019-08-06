@@ -341,7 +341,7 @@ def las_model_fn(features,
         hooks = [eval_summary_hook]
         if binf_embedding is not None:
             with tf.name_scope('binf_image'):
-                binf_image = tf.tile(binf_embedding[None, :, :, None], [tf.shape(encoder_inputs)[0], 1, 1, 1])
+                binf_image = binf_embedding[None, :, :, None]
             binf_summary = tf.summary.image('binf_image', binf_image)
             binf_hook = tf.train.SummarySaverHook(
                 save_steps=20,

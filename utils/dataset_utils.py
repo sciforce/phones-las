@@ -10,9 +10,9 @@ __all__ = [
     'input_fn_t2t'
 ]
 
-def read_dataset_t2t_format(data_dir, num_parallel_calls, mode, max_frames, max_symbols):
+def read_dataset_t2t_format(data_dir, num_parallel_calls, mode, max_frames, max_symbols, t2t_problem_name):
     problem = SpeechRecognitionProblem()
-    problem.name = 'asr_ipa_precalc'
+    problem.name = t2t_problem_name
     speech_params = transformer_librispeech_tpu()
     speech_params.max_input_seq_length = max_frames
     speech_params.max_target_seq_length = max_symbols
@@ -106,9 +106,10 @@ def process_dataset_t2t_format(dataset, sos_id, eos_id,
 
     return dataset
 
-def input_fn_t2t(data_dir, mode, hparams, batch_size=8, num_epochs=1,
+def input_fn_t2t(data_dir, mode, hparams, t2t_problem_name, batch_size=8, num_epochs=1,
     num_parallel_calls=32, max_frames=-1, max_symbols=-1, take=0):
-    dataset = read_dataset_t2t_format(data_dir, num_parallel_calls, mode, max_frames, max_symbols)
+    dataset = read_dataset_t2t_format(data_dir, num_parallel_calls, mode, max_frames,
+        max_symbols, t2t_problem_name)
 
     dataset = process_dataset_t2t_format(
         dataset, hparams.decoder.sos_id, hparams.decoder.eos_id, batch_size, num_epochs,

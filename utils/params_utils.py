@@ -22,7 +22,7 @@ class HParams(tf_contrib.training.HParams):
         return value
 
     def save_to_file(self, filename):
-        with tf.gfile.Open(filename, 'w') as f:
+        with tf.io.gfile.GFile(filename, 'w') as f:
             json.dump(self.to_json(), f)
 
 
@@ -79,8 +79,8 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
         is_reset = args.reset
     except AttributeError:
         is_reset = False
-    if tf.gfile.Exists(hparams_file) and not is_reset:
-        with tf.gfile.Open(hparams_file, 'r') as f:
+    if tf.io.gfile.exists(hparams_file) and not is_reset:
+        with tf.io.gfile.GFile(hparams_file, 'r') as f:
             hparams_dict = json.loads(json.load(f))
 
         for name, value in vars(args).items():
@@ -100,14 +100,14 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
         if value is not None:
             if name == 'mapping':
                 if not isinstance(value, list):
-                    value = [int(x.strip()) for x in tf.gfile.Open(value, 'r')]
+                    value = [int(x.strip()) for x in tf.io.gfile.GFile(value, 'r')]
                 hparams.del_hparam(name)
                 hparams.add_hparam(name, value)
             else:
                 hparams.set_hparam(name, value)
 
-    if not tf.gfile.Exists(args.model_dir):
-        tf.gfile.MkDir(args.model_dir)
+    if not tf.io.gfile.exists(args.model_dir):
+        tf.io.gfile.mkdir(args.model_dir)
     hparams.save_to_file(hparams_file)
 
     return get_encoder_decoder_hparams(hparams)

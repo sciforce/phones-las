@@ -25,6 +25,8 @@ def parse_args():
                         help='normalization params')
     parser.add_argument('--t2t_format', action='store_true',
                         help='Use dataset in the format of ASR problems of Tensor2Tensor framework. --train param should be directory')
+    parser.add_argument('--t2t_problem_name', type=str,
+                        help='Problem name for data in T2T format.')
     parser.add_argument('--mapping', type=str,
                         help='additional mapping when evaluation')
     parser.add_argument('--model_dir', type=str, required=True,
@@ -161,6 +163,7 @@ def main(args):
     def create_input_fn(mode):
         if args.t2t_format:
             return lambda params: utils.input_fn_t2t(args.train, mode, hparams,
+                args.t2t_problem_name,
                 batch_size=params.batch_size if 'batch_size' in params else args.batch_size,
                 num_epochs=args.num_epochs if mode == tf.estimator.ModeKeys.TRAIN else 1,
                 num_parallel_calls=64 if args.tpu_name and args.tpu_name != 'fake' else args.num_parallel_calls,
