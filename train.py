@@ -174,7 +174,7 @@ def main(args):
                 args.vocab, args.norm, num_channels=args.num_channels,
                 batch_size=params.batch_size if 'batch_size' in params else args.batch_size,
                 num_epochs=args.num_epochs if mode == tf.estimator.ModeKeys.TRAIN else 1,
-                num_parallel_calls=args.num_parallel_calls,
+                num_parallel_calls=64 if args.tpu_name and args.tpu_name != 'fake' else args.num_parallel_calls,
                 max_frames=args.max_frames, max_symbols=args.max_symbols)
 
 
