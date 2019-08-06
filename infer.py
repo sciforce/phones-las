@@ -225,7 +225,7 @@ def main(args):
         predict_keys.append('logits_binf')
         predict_keys.append('alignment_binf')
     predictions = model.predict(
-        input_fn=lambda: input_fn(
+        input_fn=lambda: utils.input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
             take=args.take, is_infer=True),
         predict_keys=predict_keys)
