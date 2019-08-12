@@ -136,7 +136,10 @@ def get_alignment_history(final_context_state, params):
     except AttributeError:
         # if not isinstance(final_context_state.cell_state, tuple):
         if hasattr(final_context_state.cell_state, 'alignment_history'):
-            alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
+            try:
+                alignment_history = tf.transpose(final_context_state.cell_state.alignment_history, perm=[1, 0, 2])
+            except ValueError:
+                alignment_history = tf.transpose(final_context_state.cell_state.alignment_history.stack(), perm=[1, 0, 2])
         else:
             alignment_history = tf.transpose(final_context_state.cell_state[-1].alignment_history, perm=[1, 0, 2])
         shape = tf.shape(alignment_history)
@@ -180,6 +183,8 @@ def las_model_fn(features,
         if binf_embedding is not None:
             targets_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), targets)
             decoder_inputs_binf = tf.nn.embedding_lookup(tf.transpose(binf_embedding), decoder_inputs)
+    else:
+        decoder_inputs = features.get('partial_targets')
 
     tf.logging.info('Building listener')
     with tf.variable_scope('listener'):

@@ -285,8 +285,15 @@ def speller(encoder_outputs,
             decoder_cell, helper, initial_state, output_layer=projection_layer)
 
     elif mode == tf.estimator.ModeKeys.PREDICT and beam_width > 0:
-        start_tokens = tf.fill(
-            [tf.div(batch_size, beam_width)], hparams.sos_id)
+        if decoder_inputs is not None:
+            start_tokens = decoder_inputs[:, 0]
+            decoder_inputs_batch = tf_contrib.seq2seq.tile_batch(
+                decoder_inputs, multiplier=beam_width)
+            initial_state = get_partial_targets_state(initial_state, decoder_cell, projection_layer,
+                embedding_fn(decoder_inputs_batch), batch_size, hparams)
+        else:
+            start_tokens = tf.fill(
+                [tf.div(batch_size, beam_width)], hparams.sos_id)
 
         decoder = tf_contrib.seq2seq.BeamSearchDecoder(
             cell=decoder_cell,
@@ -314,7 +321,10 @@ def speller(encoder_outputs,
         decoder = tf_contrib.seq2seq.BasicDecoder(
             decoder_cell, helper, initial_state, output_layer=projection_layer)
     else:
-        start_tokens = tf.fill([batch_size], hparams.sos_id)
+        if decoder_inputs is not None:
+            start_tokens = decoder_inputs[:, 0]
+        else:
+            start_tokens = tf.fill([batch_size], hparams.sos_id)
 
         helper = tf_contrib.seq2seq.GreedyEmbeddingHelper(
             embedding_fn, start_tokens, hparams.eos_id)
@@ -326,3 +336,15 @@ def speller(encoder_outputs,
         decoder, maximum_iterations=maximum_iterations)
 
     return decoder_outputs, final_context_state, final_sequence_length
+
+def get_partial_targets_state(initial_state, decoder_cell, projection_layer,
+    decoder_inputs, batch_size, hparams):
+    with tf.name_scope('partial_targets_state'):
+        seq_length = tf.shape(decoder_inputs)[1]
+        helper = tf_contrib.seq2seq.TrainingHelper(
+            decoder_inputs, tf.tile([seq_length], [batch_size]))
+        decoder = tf_contrib.seq2seq.BasicDecoder(
+            decoder_cell, helper, initial_state, output_layer=projection_layer)
+        _, final_context_state, _ = tf_contrib.seq2seq.dynamic_decode(
+            decoder, maximum_iterations=seq_length)
+    return final_context_state
