@@ -326,10 +326,7 @@ def speller(encoder_outputs,
         decoder = tf_contrib.seq2seq.BasicDecoder(
             decoder_cell, helper, initial_state, output_layer=projection_layer)
     else:
-        if decoder_inputs is not None:
-            start_tokens = decoder_inputs[:, 0]
-        else:
-            start_tokens = tf.fill([batch_size], hparams.sos_id)
+        start_tokens = tf.fill([batch_size], hparams.sos_id)
 
         helper = tf_contrib.seq2seq.GreedyEmbeddingHelper(
             embedding_fn, start_tokens, hparams.eos_id)
