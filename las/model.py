@@ -248,14 +248,16 @@ def speller(encoder_outputs,
         inner_projection_layer=not hparams.binf_projection,
         kernel_initializer=tf.random_uniform_initializer(minval=-0.075, maxval=0.075))
 
-    if hparams.pass_hidden_state and hparams.bottom_only:
-        initial_state = tuple(
-            zs.clone(cell_state=es)
-            if isinstance(zs, tf_contrib.seq2seq.AttentionWrapperState) else es
-            for zs, es in zip(
-                decoder_cell.zero_state(batch_size, tf.float32), encoder_state))
-    else:
-        initial_state = decoder_cell.zero_state(batch_size, tf.float32)
+    def get_initial_state():
+        if hparams.pass_hidden_state and hparams.bottom_only:
+            return tuple(
+                zs.clone(cell_state=es)
+                if isinstance(zs, tf_contrib.seq2seq.AttentionWrapperState) else es
+                for zs, es in zip(
+                    decoder_cell.zero_state(batch_size, tf.float32), encoder_state))
+        else:
+            return decoder_cell.zero_state(batch_size, tf.float32)
+    initial_state = get_initial_state()
 
     maximum_iterations = hparams.max_symbols if hparams.max_symbols > 0 else None
     if mode != tf.estimator.ModeKeys.TRAIN:
@@ -285,8 +287,18 @@ def speller(encoder_outputs,
             decoder_cell, helper, initial_state, output_layer=projection_layer)
 
     elif mode == tf.estimator.ModeKeys.PREDICT and beam_width > 0:
-        start_tokens = tf.fill(
-            [tf.div(batch_size, beam_width)], hparams.sos_id)
+        if decoder_inputs is not None:
+            start_tokens = decoder_inputs[:, 0]
+            decoder_inputs_batch = tf_contrib.seq2seq.tile_batch(
+                decoder_inputs, multiplier=beam_width)
+            initial_state = get_partial_targets_state(initial_state, decoder_cell, projection_layer,
+                embedding_fn(decoder_inputs_batch), batch_size, hparams)
+            with tf.variable_scope('init_partial_targets'):
+                zerostate = get_initial_state()
+                initial_state = initial_state._replace(alignment_history=zerostate.alignment_history, time=zerostate.time)
+        else:
+            start_tokens = tf.fill(
+                [tf.div(batch_size, beam_width)], hparams.sos_id)
 
         decoder = tf_contrib.seq2seq.BeamSearchDecoder(
             cell=decoder_cell,
@@ -326,3 +338,15 @@ def speller(encoder_outputs,
         decoder, maximum_iterations=maximum_iterations)
 
     return decoder_outputs, final_context_state, final_sequence_length
+
+def get_partial_targets_state(initial_state, decoder_cell, projection_layer,
+    decoder_inputs, batch_size, hparams):
+    with tf.name_scope('partial_targets_state'):
+        seq_length = tf.shape(decoder_inputs)[1]
+        helper = tf_contrib.seq2seq.TrainingHelper(
+            decoder_inputs, tf.tile([seq_length], [batch_size]))
+        decoder = tf_contrib.seq2seq.BasicDecoder(
+            decoder_cell, helper, initial_state, output_layer=projection_layer)
+        _, final_context_state, _ = tf_contrib.seq2seq.dynamic_decode(
+            decoder, maximum_iterations=seq_length)
+    return final_context_state
