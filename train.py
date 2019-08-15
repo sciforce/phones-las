@@ -103,6 +103,8 @@ def parse_args():
                         help='If positives, sets that much frames for each batch.')
     parser.add_argument('--max_symbols', type=int, default=-1,
                         help='If positives, sets that much symbols for each batch.')
+    parser.add_argument('--tpu_checkpoints_interval', type=int, default=600,
+                        help='Interval for saving checkpoints on TPU, in steps.')
 
     return parser.parse_args()
 
@@ -130,7 +132,7 @@ def main(args):
         config = tf.estimator.tpu.RunConfig(
             cluster=tpu_cluster_resolver,
             model_dir=args.model_dir,
-            save_checkpoints_steps=max(600, iterations_per_loop),
+            save_checkpoints_steps=max(args.tpu_checkpoints_interval, iterations_per_loop),
             tpu_config=tf.estimator.tpu.TPUConfig(
                 iterations_per_loop=iterations_per_loop,
                 per_host_input_for_training=tf.estimator.tpu.InputPipelineConfig.PER_HOST_V2))
