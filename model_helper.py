@@ -230,8 +230,11 @@ def las_model_fn(features,
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_binf, -1))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        emb_c = tf.concat([x.c for x in encoder_state], axis=1)
-        emb_h = tf.concat([x.h for x in encoder_state], axis=1)
+        try:
+            emb_c = tf.concat([x.c for x in encoder_state], axis=1)
+            emb_h = tf.concat([x.h for x in encoder_state], axis=1)
+        except AttributeError:
+            emb_c, emb_h = encoder_state.c, encoder_state.h
         emb = tf.stack([emb_c, emb_h], axis=1)
         predictions = {
             'embedding': emb,
