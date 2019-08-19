@@ -103,6 +103,10 @@ def parse_args():
                         help='If positives, sets that much frames for each batch.')
     parser.add_argument('--max_symbols', type=int, default=-1,
                         help='If positives, sets that much symbols for each batch.')
+    parser.add_argument('--tpu_checkpoints_interval', type=int, default=600,
+                        help='Interval for saving checkpoints on TPU, in steps.')
+    parser.add_argument('--t2t_features_hparams_override', type=str, default='',
+                        help='String with overrided parameters used by Tensor2Tensor problem.')
 
     return parser.parse_args()
 
@@ -130,7 +134,7 @@ def main(args):
         config = tf.estimator.tpu.RunConfig(
             cluster=tpu_cluster_resolver,
             model_dir=args.model_dir,
-            save_checkpoints_steps=max(600, iterations_per_loop),
+            save_checkpoints_steps=max(args.tpu_checkpoints_interval, iterations_per_loop),
             tpu_config=tf.estimator.tpu.TPUConfig(
                 iterations_per_loop=iterations_per_loop,
                 per_host_input_for_training=tf.estimator.tpu.InputPipelineConfig.PER_HOST_V2))
@@ -167,7 +171,8 @@ def main(args):
                 batch_size=params.batch_size if 'batch_size' in params else args.batch_size,
                 num_epochs=args.num_epochs if mode == tf.estimator.ModeKeys.TRAIN else 1,
                 num_parallel_calls=64 if args.tpu_name and args.tpu_name != 'fake' else args.num_parallel_calls,
-                max_frames=args.max_frames, max_symbols=args.max_symbols)
+                max_frames=args.max_frames, max_symbols=args.max_symbols,
+                features_hparams_override=args.t2t_features_hparams_override)
         else:
             return lambda params: utils.input_fn(
                 args.valid if mode == tf.estimator.ModeKeys.EVAL and args.valid else args.train,

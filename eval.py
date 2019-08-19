@@ -32,6 +32,8 @@ def parse_args():
                         help='number of input channels')
     parser.add_argument('--binf_map', type=str, default='misc/binf_map.csv',
                         help='Path to CSV with phonemes to binary features map')
+    parser.add_argument('--t2t_features_hparams_override', type=str, default='',
+                        help='String with overrided parameters used by Tensor2Tensor problem.')
 
     return parser.parse_args()
 
@@ -62,7 +64,8 @@ def main(args):
     if args.t2t_format:
         input_fn = lambda: utils.input_fn_t2t(
             args.data, tf.estimator.ModeKeys.EVAL, hparams,
-            args.t2t_problem_name, batch_size=args.batch_size)
+            args.t2t_problem_name, batch_size=args.batch_size,
+            features_hparams_override=args.t2t_features_hparams_override)
     else:
         input_fn = lambda: utils.input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels,
