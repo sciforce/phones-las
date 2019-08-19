@@ -105,7 +105,7 @@ def parse_args():
                         help='If positives, sets that much symbols for each batch.')
     parser.add_argument('--tpu_checkpoints_interval', type=int, default=600,
                         help='Interval for saving checkpoints on TPU, in steps.')
-    parser.add_argument('--features_hparams_override', type=str, default='',
+    parser.add_argument('--t2t_features_hparams_override', type=str, default='',
                         help='String with overrided parameters used by Tensor2Tensor problem.')
 
     return parser.parse_args()
@@ -172,7 +172,7 @@ def main(args):
                 num_epochs=args.num_epochs if mode == tf.estimator.ModeKeys.TRAIN else 1,
                 num_parallel_calls=64 if args.tpu_name and args.tpu_name != 'fake' else args.num_parallel_calls,
                 max_frames=args.max_frames, max_symbols=args.max_symbols,
-                features_hparams_override=args.features_hparams_override)
+                features_hparams_override=args.t2t_features_hparams_override)
         else:
             return lambda params: utils.input_fn(
                 args.valid if mode == tf.estimator.ModeKeys.EVAL and args.valid else args.train,
