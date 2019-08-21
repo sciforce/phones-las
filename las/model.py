@@ -176,7 +176,10 @@ def attend(encoder_outputs,
 
     alignment_history = (mode != tf.estimator.ModeKeys.TRAIN)
 
-    attention_layer_size = hparams.binf_count if hparams.binf_projection else hparams.attention_layer_size
+    if hparams.binf_projection and not hparams.binf_sampling:
+        attention_layer_size = hparams.binf_count * 2
+    else:
+        attention_layer_size = hparams.attention_layer_size
 
     if hparams.bottom_only:
         attention_cell = cell_list.pop(0)
@@ -235,6 +238,8 @@ def speller(encoder_outputs,
                 return tf.cast(ids, tf.float32)
             else:
                 return tf.nn.embedding_lookup(tf.transpose(binf_embedding), ids)
+        elif hparams.binf_projection:
+            return tf.nn.embedding_lookup(tf.transpose(binf_embedding), ids)
         else:
             return tf.one_hot(ids, hparams.target_vocab_size)
 
@@ -246,6 +251,7 @@ def speller(encoder_outputs,
         binf_to_ipa=binf_embedding if mode != tf.estimator.ModeKeys.TRAIN or hparams.binf_projection else None,
         use_bias=True, name='projection_layer',
         inner_projection_layer=not hparams.binf_projection,
+        concat_cell_outputs=hparams.binf_projection and mode == tf.estimator.ModeKeys.TRAIN,
         kernel_initializer=tf.random_uniform_initializer(minval=-0.075, maxval=0.075))
 
     def get_initial_state():
@@ -275,7 +281,8 @@ def speller(encoder_outputs,
             else:
                 helper = TPUScheduledEmbeddingTrainingHelper(
                     decoder_inputs, target_sequence_length,
-                    embedding_fn, hparams.sampling_probability)
+                    embedding_fn, hparams.sampling_probability,
+                    outputs_count=binf_embedding.shape[-1] if hparams.binf_projection else None)
         else:
             if binary_outputs:
                 helper = TrainingSigmoidHelper(decoder_inputs, target_sequence_length,

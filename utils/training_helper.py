@@ -15,9 +15,12 @@ __all__ = [
 
 def transform_binf_to_phones(outputs, binf_to_ipa):
     # Transform binary features logits to phone log probabilities (unnormalized)
-    log_prob_ones = -tf.log(1 + tf.exp(-outputs))
-    log_prob_ones = tf.where(tf.is_inf(log_prob_ones), tf.zeros_like(log_prob_ones) - 1e6, log_prob_ones)
-    log_prob_zeros = -outputs - log_prob_ones
+    # assert(outputs.shape[-1] // 2 == binf_to_ipa.shape[0])
+    log_prob_ones = outputs[..., :binf_to_ipa.shape[0]]
+    log_prob_zeros = outputs[..., binf_to_ipa.shape[0]:]
+    # log_prob_ones = -tf.log(1 + tf.exp(-outputs))
+    # log_prob_ones = tf.where(tf.is_inf(log_prob_ones), tf.zeros_like(log_prob_ones) - 1e6, log_prob_ones)
+    # log_prob_zeros = -outputs - log_prob_ones
     if outputs.shape.ndims == 3:
         binf_to_ipa_tiled = tf.tile(binf_to_ipa[None, :, :], [tf.shape(outputs)[0], 1, 1])
     else:
@@ -46,7 +49,9 @@ class TrainingSigmoidHelper(tf_contrib.seq2seq.TrainingHelper):
 
 class TPUScheduledEmbeddingTrainingHelper(tf_contrib.seq2seq.ScheduledEmbeddingTrainingHelper):
     def __init__(self, inputs, sequence_length, embedding, sampling_probability,
-                 time_major=False, seed=None, scheduling_seed=None, name=None):
+                 time_major=False, seed=None, scheduling_seed=None, name=None,
+                 outputs_count=False):
+        self.outputs_count = outputs_count
         super().__init__(inputs, sequence_length, embedding, sampling_probability,
                          time_major, seed, scheduling_seed, name)
 
@@ -74,6 +79,13 @@ class TPUScheduledEmbeddingTrainingHelper(tf_contrib.seq2seq.ScheduledEmbeddingT
                 all_finished, lambda: base_next_inputs, maybe_sample)
             return finished, next_inputs, state
 
+    def sample(self, time, outputs, state, name=None):
+        if self.outputs_count is not None:
+            outputs_ = outputs[..., :self.outputs_count]
+        else:
+            outputs_ = outputs
+
+        return super().sample(time, outputs_, state, name)
 
 class ScheduledSigmoidHelper(TPUScheduledEmbeddingTrainingHelper):
     def __init__(self, inputs, sequence_length, embedding, sampling_probability,
@@ -114,9 +126,11 @@ class DenseBinfDecoder(tf.layers.Dense):
     original layer's outputs, assumed to be binary features logits,
     to phonemes logits.
     '''
-    def __init__(self, units, binf_to_ipa=None, inner_projection_layer=True, **kwargs):
+    def __init__(self, units, binf_to_ipa=None, inner_projection_layer=True,
+                 concat_cell_outputs=False, **kwargs):
         self.binf_to_ipa = binf_to_ipa
         self.inner_projection_layer = inner_projection_layer
+        self.concat_cell_outputs = concat_cell_outputs
         super().__init__(units, **kwargs)
 
     def call(self, inputs):
@@ -126,10 +140,15 @@ class DenseBinfDecoder(tf.layers.Dense):
             outputs = inputs
         if self.binf_to_ipa is not None:
             outputs = transform_binf_to_phones(outputs, self.binf_to_ipa)
+        if self.concat_cell_outputs:
+            outputs = tf.concat((outputs, inputs), axis=-1)
         return outputs
 
     def compute_output_shape(self, input_shape):
         out = super().compute_output_shape(input_shape)
         if self.binf_to_ipa is not None:
-            out = out[:-1].concatenate(self.binf_to_ipa.shape[-1])
+            updated_dim_size = self.binf_to_ipa.shape[-1]
+            if self.concat_cell_outputs:
+                updated_dim_size += input_shape[-1]
+            out = out[:-1].concatenate(updated_dim_size)
         return out
