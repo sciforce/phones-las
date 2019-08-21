@@ -134,7 +134,7 @@ def compute_log_probs_loss(outputs):
     log_prob_ones = outputs[..., :nfeatures]
     log_prob_zeros = outputs[..., nfeatures:]
     norm_const = tf.stop_gradient(-(log_prob_ones + log_prob_zeros) / 2)
-    loss = (tf.exp(log_prob_ones + norm_const) + tf.exp(log_prob_zeros + norm_const)) / tf.exp(norm_const) - 1
+    loss = tf.abs((tf.exp(log_prob_ones + norm_const) + tf.exp(log_prob_zeros + norm_const)) / tf.exp(norm_const) - 1)
     loss += tf.nn.relu(log_prob_ones) + tf.nn.relu(log_prob_zeros)
     return tf.reduce_mean(loss)
 
@@ -311,7 +311,7 @@ def las_model_fn(features,
                 audio_loss_binf = compute_loss(
                     logits_binf, targets, final_sequence_length_binf, target_sequence_length, mode, params.decoder.eos_id)
                 if raw_rnn_outputs is not None:
-                    audio_loss_binf += 1e-1 * compute_log_probs_loss(raw_rnn_outputs)
+                    audio_loss_binf += compute_log_probs_loss(raw_rnn_outputs)
             else:
                 if mode == tf.estimator.ModeKeys.TRAIN:
                     audio_loss_binf = compute_loss_sigmoid(logits_binf, targets_binf,
