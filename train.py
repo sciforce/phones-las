@@ -94,6 +94,8 @@ def parse_args():
                         help='with --output_ipa, do not use ipa sampling algorithm for trainin, only for validation')
     parser.add_argument('--binf_projection', action='store_true',
                         help='with --binary_outputs and --output_ipa, use binary features mapping instead of decoder''s projection layer.')
+    parser.add_argument('--binf_projection_reg_weight', type=float, default=1.0,
+                        help='with --binf_projection, weight for regularization term for binary features log probabilities.')
     parser.add_argument('--binf_trainable', action='store_true',
                         help='trainable binary features matrix'),
     parser.add_argument('--multitask', action='store_true',

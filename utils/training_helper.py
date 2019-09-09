@@ -15,8 +15,9 @@ __all__ = [
 
 def transform_binf_to_phones(outputs, binf_to_ipa):
     # Transform binary features logits to phone log probabilities (unnormalized)
-    log_prob_ones = outputs[..., :binf_to_ipa.shape[0]]
-    log_prob_zeros = outputs[..., binf_to_ipa.shape[0]:]
+    nfeatures = binf_to_ipa.shape[0]
+    log_prob_ones = outputs[..., :nfeatures]
+    log_prob_zeros = outputs[..., nfeatures:2 * nfeatures]
     if outputs.shape.ndims == 3:
         binf_to_ipa_tiled = tf.tile(binf_to_ipa[None, :, :], [tf.shape(outputs)[0], 1, 1])
     else:
