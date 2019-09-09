@@ -63,6 +63,7 @@ def get_default_hparams():
         binary_outputs=False,
         binf_sampling=False,
         binf_projection=False,
+        binf_projection_reg_weight=1.0,
         binf_trainable=False,
         multitask=False,
         # evaluation setting
@@ -127,6 +128,7 @@ def get_encoder_decoder_hparams(hparams):
     binary_outputs = hparams.pop_hparam('binary_outputs')
     binf_sampling = hparams.pop_hparam('binf_sampling')
     binf_projection = hparams.pop_hparam('binf_projection')
+    binf_projection_reg_weight = hparams.pop_hparam('binf_projection_reg_weight')
     binf_trainable = hparams.pop_hparam('binf_trainable')
     multitask = hparams.pop_hparam('multitask')
 
@@ -144,6 +146,7 @@ def get_encoder_decoder_hparams(hparams):
         binary_outputs=binary_outputs,
         binf_sampling=binf_sampling,
         binf_projection=binf_projection,
+        binf_projection_reg_weight=binf_projection_reg_weight,
         max_symbols=max_symbols,
         multitask=multitask,
         binf_trainable=binf_trainable)

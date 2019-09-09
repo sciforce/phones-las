@@ -129,6 +129,21 @@ def compute_loss_sigmoid(logits, targets, final_sequence_length, target_sequence
 
     return loss
 
+def compute_log_probs_loss(outputs):
+    '''
+    Calculate regularization loss to enforce RNN to output normalized log probabilities
+    instead of logits.
+    '''
+    nfeatures = outputs.shape[-1] // 2
+    log_prob_ones = outputs[..., :nfeatures]
+    log_prob_zeros = outputs[..., nfeatures:2 * nfeatures]
+    # Normalization constant to ensure numerical stability. No gradients are needed, as soon as it's a constant.
+    norm_const = tf.stop_gradient(-(log_prob_ones + log_prob_zeros) / 2)
+    # Enforce `p0 + p1 = 1. Multiply and divide by `e^norm_const` to ensure numerical stability.
+    loss = tf.abs((tf.exp(log_prob_ones + norm_const) + tf.exp(log_prob_zeros + norm_const)) / tf.exp(norm_const) - 1)
+    # Enforce `0 <= p0 <= 1` and `0 <= p1 <= 1`
+    loss += tf.nn.relu(log_prob_ones) + tf.nn.relu(log_prob_zeros)
+    return tf.reduce_mean(loss)
 
 def get_alignment_history(final_context_state, params):
     try:
@@ -200,7 +215,7 @@ def las_model_fn(features,
                 source_sequence_length, target_sequence_length,
                 mode, params.decoder)
 
-    decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = None, None, None
+    decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf, raw_rnn_outputs = None, None, None, None
     if params.decoder.binary_outputs:
         with tf.variable_scope('speller_binf'):
             decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf = las.model.speller(
@@ -223,6 +238,10 @@ def las_model_fn(features,
                 sample_ids_phones = tf.to_int32(tf.argmax(logits, -1))
             if decoder_outputs_binf is not None:
                 logits_binf = decoder_outputs_binf.rnn_output
+                if params.decoder.binf_projection and mode == tf.estimator.ModeKeys.TRAIN:
+                    raw_rnn_outputs = logits_binf[..., binf2phone.shape[-1]:]
+                    logits_binf = logits_binf[..., :binf2phone.shape[-1]]
+
                 if params.decoder.binary_outputs and params.decoder.binf_sampling:
                     logits_phones_binf = transform_binf_to_phones(logits_binf, binf_embedding)
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_phones_binf, -1))
@@ -230,17 +249,21 @@ def las_model_fn(features,
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_binf, -1))
 
     if mode == tf.estimator.ModeKeys.PREDICT:
+        predictions = {
+            'encoder_out': encoder_outputs,
+            'source_length': source_sequence_length
+        }
         try:
             emb_c = tf.concat([x.c for x in encoder_state], axis=1)
             emb_h = tf.concat([x.h for x in encoder_state], axis=1)
         except AttributeError:
-            emb_c, emb_h = encoder_state.c, encoder_state.h
-        emb = tf.stack([emb_c, emb_h], axis=1)
-        predictions = {
-            'embedding': emb,
-            'encoder_out': encoder_outputs,
-            'source_length': source_sequence_length
-        }
+            try:
+                emb_c, emb_h = encoder_state.c, encoder_state.h
+            except:
+                emb_c, emb_h = None, None
+        if emb_c and emb_h:
+            emb = tf.stack([emb_c, emb_h], axis=1)
+            predictions['embedding'] = emb
         if sample_ids_phones is not None:
             predictions['sample_ids'] = sample_ids_phones
         if logits_binf is not None:
@@ -294,6 +317,8 @@ def las_model_fn(features,
             if params.decoder.binf_projection:
                 audio_loss_binf = compute_loss(
                     logits_binf, targets, final_sequence_length_binf, target_sequence_length, mode, params.decoder.eos_id)
+                if raw_rnn_outputs is not None:
+                    audio_loss_binf += compute_log_probs_loss(raw_rnn_outputs) * params.decoder.binf_projection_reg_weight
             else:
                 if mode == tf.estimator.ModeKeys.TRAIN:
                     audio_loss_binf = compute_loss_sigmoid(logits_binf, targets_binf,
