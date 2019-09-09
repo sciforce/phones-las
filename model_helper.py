@@ -137,9 +137,9 @@ def compute_log_probs_loss(outputs):
     nfeatures = outputs.shape[-1] // 2
     log_prob_ones = outputs[..., :nfeatures]
     log_prob_zeros = outputs[..., nfeatures:2 * nfeatures]
-    # Normalization constant to ensure numerical stability
+    # Normalization constant to ensure numerical stability. No gradients are needed, as soon as it's a constant.
     norm_const = tf.stop_gradient(-(log_prob_ones + log_prob_zeros) / 2)
-    # Enforce `p0 + p1 = 1`
+    # Enforce `p0 + p1 = 1. Multiply and divide by `e^norm_const` to ensure numerical stability.
     loss = tf.abs((tf.exp(log_prob_ones + norm_const) + tf.exp(log_prob_zeros + norm_const)) / tf.exp(norm_const) - 1)
     # Enforce `0 <= p0 <= 1` and `0 <= p1 <= 1`
     loss += tf.nn.relu(log_prob_ones) + tf.nn.relu(log_prob_zeros)
