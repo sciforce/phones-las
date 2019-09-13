@@ -177,7 +177,7 @@ def attend(encoder_outputs,
     alignment_history = (mode != tf.estimator.ModeKeys.TRAIN)
 
     if hparams.binf_projection and not hparams.binf_sampling:
-        attention_layer_size = hparams.binf_count * 2
+        attention_layer_size = hparams.binf_count
     else:
         attention_layer_size = hparams.attention_layer_size
 

@@ -6,7 +6,7 @@ import tensorflow.contrib as tf_contrib
 import las
 import utils
 
-from utils.training_helper import transform_binf_to_phones
+from utils.training_helper import transform_binf_to_phones, get_log_prob_zeros
 
 __all__ = [
     'las_model_fn',
@@ -134,13 +134,12 @@ def compute_log_probs_loss(outputs):
     Calculate regularization loss to enforce RNN to output normalized log probabilities
     instead of logits.
     '''
-    nfeatures = outputs.shape[-1] // 2
-    log_prob_ones = outputs[..., :nfeatures]
-    log_prob_zeros = outputs[..., nfeatures:2 * nfeatures]
+    log_prob_ones = outputs
+    log_prob_zeros = get_log_prob_zeros(outputs)
     # Normalization constant to ensure numerical stability. No gradients are needed, as soon as it's a constant.
     norm_const = tf.stop_gradient(-(log_prob_ones + log_prob_zeros) / 2)
     # Enforce `p0 + p1 = 1. Multiply and divide by `e^norm_const` to ensure numerical stability.
-    loss = tf.abs((tf.exp(log_prob_ones + norm_const) + tf.exp(log_prob_zeros + norm_const)) / tf.exp(norm_const) - 1)
+    loss = ((tf.exp(log_prob_ones + norm_const) + tf.exp(log_prob_zeros + norm_const)) / tf.exp(norm_const) - 1) ** 2
     # Enforce `0 <= p0 <= 1` and `0 <= p1 <= 1`
     loss += tf.nn.relu(log_prob_ones) + tf.nn.relu(log_prob_zeros)
     return tf.reduce_mean(loss)

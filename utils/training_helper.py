@@ -9,15 +9,28 @@ __all__ = [
     'ScheduledSigmoidHelper',
     'TPUScheduledEmbeddingTrainingHelper',
     'DenseBinfDecoder',
-    'transform_binf_to_phones'
+    'transform_binf_to_phones',
+    'get_log_prob_zeros'
 ]
+
+
+def get_log_prob_zeros(outputs):
+    log_prob_zeros_layer = tf.keras.Sequential([
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dense(1),
+    ], name='log_prob_zeros_model')
+    log_prob_zeros = log_prob_zeros_layer(outputs[..., None])
+    return tf.squeeze(log_prob_zeros, axis=[-1])
 
 
 def transform_binf_to_phones(outputs, binf_to_ipa):
     # Transform binary features logits to phone log probabilities (unnormalized)
-    nfeatures = binf_to_ipa.shape[0]
-    log_prob_ones = outputs[..., :nfeatures]
-    log_prob_zeros = outputs[..., nfeatures:2 * nfeatures]
+    log_prob_ones = outputs
+    log_prob_zeros = get_log_prob_zeros(outputs)
+    # nfeatures = binf_to_ipa.shape[0]
+    # log_prob_ones = outputs[..., :nfeatures]
+    # log_prob_zeros = outputs[..., nfeatures:2 * nfeatures]
     if outputs.shape.ndims == 3:
         binf_to_ipa_tiled = tf.tile(binf_to_ipa[None, :, :], [tf.shape(outputs)[0], 1, 1])
     else:
