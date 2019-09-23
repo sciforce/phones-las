@@ -227,7 +227,8 @@ def speller(encoder_outputs,
                 'target_embedding', [
                     hparams.target_vocab_size,
                     hparams.embedding_size],
-                dtype=tf.float32, initializer=tf_contrib.layers.xavier_initializer())
+                dtype=tf.float32, initializer=tf.initializers.random_normal())
+            target_embedding = tf.sigmoid(target_embedding)
 
             return tf.nn.embedding_lookup(target_embedding, ids)
         elif binary_outputs:

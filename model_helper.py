@@ -7,6 +7,7 @@ import las
 import utils
 
 from utils.training_helper import transform_binf_to_phones
+from utils import create_rev_vocab_table
 
 __all__ = [
     'las_model_fn',
@@ -307,7 +308,8 @@ def las_model_fn(features,
         decoded_ctc = tf.cast(decoded_ctc, tf.int32)
         if target_sequence_length is not None:
             ctc_loss = tf.nn.ctc_loss_v2(labels=targets, logits=ctc_logits, logits_time_major=False,
-                                         label_length=target_sequence_length, logit_length=source_sequence_length)
+                                         label_length=target_sequence_length, logit_length=source_sequence_length,
+                                         blank_index=-1)
             ctc_loss = tf.reduce_mean(ctc_loss, name='ctc_phone_loss')
             audio_loss += ctc_loss * params.ctc_weight
             tf.compat.v1.summary.scalar('ctc_loss', ctc_loss)
@@ -316,14 +318,25 @@ def las_model_fn(features,
                     decoded_ctc, targets, utils.EOS_ID, params.mapping if mapping is None else None)
                 metrics['ctc_edit_distance'] = tf.compat.v1.metrics.mean(ctc_edit_distance)
             if mode != tf.estimator.ModeKeys.TRAIN:
-                tf.compat.v1.summary.scalar('ctc_edit_distance', metrics['ctc_edit_distance'][1])
+                tf.compat.v1.summary.scalar('edit_distance/ctc', metrics['ctc_edit_distance'][1])
             else:
-                tf.compat.v1.summary.scalar('ctc_edit_distance', tf.reduce_mean(ctc_edit_distance))
+                tf.compat.v1.summary.scalar('edit_distance/ctc', tf.reduce_mean(ctc_edit_distance))
 
     if mode == tf.estimator.ModeKeys.EVAL:
         with tf.name_scope('alignment'):
             attention_images = utils.create_attention_images(
                 final_context_state or final_context_state_binf)
+        if sample_ids_phones is not None:
+            tf.compat.v1.logging.info('Addings text summary for predictions.')
+            if mapping is not None:
+                text_ids = tf.nn.embedding_lookup(mapping, sample_ids_phones)
+            else:
+                text_ids = sample_ids_phones
+            vocab_table = create_rev_vocab_table(params.vocab)
+            text_str = vocab_table.lookup(tf.cast(text_ids, tf.int64))
+            text_summary = tf.compat.v1.summary.text('prediction', text_str)
+        else:
+            text_summary = None
 
         run_name = run_name or 'eval'
         if run_name != 'eval':
@@ -333,7 +346,7 @@ def las_model_fn(features,
         eval_summary_hook = tf.estimator.SummarySaverHook(
             save_steps=20,
             output_dir=os.path.join(config.model_dir, run_name),
-            summary_op=attention_summary)
+            summary_op=attention_summary if text_summary is None else [attention_summary, text_summary])
         hooks = [eval_summary_hook]
         loss = audio_loss
         log_data = {

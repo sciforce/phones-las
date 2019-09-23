@@ -3,6 +3,7 @@ import pickle
 
 __all__ = [
     'create_vocab_table',
+    'create_rev_vocab_table',
     'load_vocab',
     'UNK',
     'SOS',
@@ -39,3 +40,10 @@ def create_vocab_table(filename):
 
     return tf.contrib.lookup.index_table_from_tensor(
         tf.constant(vocab_list), num_oov_buckets=0, default_value=UNK_ID)
+
+
+def create_rev_vocab_table(filename):
+    vocab_list = load_vocab(filename)
+
+    return tf.contrib.lookup.index_to_string_table_from_tensor(
+        tf.constant(vocab_list), default_value=UNK)

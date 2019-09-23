@@ -37,6 +37,7 @@ def get_default_hparams():
         tpu_name='',
         max_frames=-1,
         max_symbols=-1,
+        vocab=None,
 
         # encoder setting
         encoder_layers=3,
@@ -112,6 +113,7 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
 
 
 def get_encoder_decoder_hparams(hparams):
+    vocab = hparams.pop_hparam('vocab')
     learning_rate = hparams.pop_hparam('learning_rate')
     ctc_weight = hparams.pop_hparam('ctc_weight')
     tpu_name = hparams.pop_hparam('tpu_name')
@@ -148,6 +150,7 @@ def get_encoder_decoder_hparams(hparams):
         decoder_hparams.add_hparam(name, value)
 
     return HParams(
+        vocab=vocab,
         learning_rate=learning_rate,
         mapping=mapping,
         l2_reg_scale=l2_reg_scale,
