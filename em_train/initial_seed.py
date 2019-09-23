@@ -15,3 +15,6 @@ if __name__ == "__main__":
     with open(os.path.join(args.base_dir, 'seed.csv'), 'w') as f:
         for l in seed:
             f.write('{}\n'.format(l.strip()))
+    with open(os.path.join(args.base_dir, 'e_step.csv'), 'w') as f:
+        for l in seed:
+            f.write('{}\n'.format(l.strip()))
