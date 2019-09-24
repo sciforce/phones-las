@@ -57,7 +57,7 @@ def main(args):
         input_fn=lambda: utils.input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
             is_infer=True),
-        predict_keys=['sample_ids'])
+        predict_keys=['sample_ids_phones_binf'])
 
     targets, seed_data = [], {}
     for line in open(os.path.join(args.data_dir, 'train.csv'), 'r'):
@@ -73,7 +73,7 @@ def main(args):
             if target[0] not in seed_data:
                 if np.random.rand() > args.keep_elem_prob:
                     continue
-                beams = p['sample_ids'].T
+                beams = p['sample_ids_phones_binf'].T
                 i = beams.tolist() + [utils.EOS_ID]
                 i = i[:i.index(utils.EOS_ID)]
                 text = to_text(vocab_list, i)
