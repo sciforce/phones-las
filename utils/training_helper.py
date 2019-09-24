@@ -66,8 +66,9 @@ class TPUScheduledEmbeddingTrainingHelper(tf_contrib.seq2seq.ScheduledEmbeddingT
             def maybe_sample():
                 """Perform scheduled sampling."""
                 sampling_mask = math_ops.cast(sample_ids > -1, base_next_inputs.dtype)
+                # Embedding lookup might fail for negative samples.
+                outputs_sampled = self._embedding_fn(sample_ids + tf.cast(1 - sampling_mask, tf.int32))
                 sampling_mask = tf.expand_dims(sampling_mask, axis=-1)
-                outputs_sampled = self._embedding_fn(sample_ids)
                 outputs = sampling_mask * outputs_sampled + (1 - sampling_mask) * base_next_inputs
                 return outputs
 
