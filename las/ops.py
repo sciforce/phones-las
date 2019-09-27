@@ -48,19 +48,14 @@ def bilstm(inputs,
 
 def pyramidal_stack(outputs, sequence_length):
     shape = tf.shape(outputs)
-    batch_size, max_time = shape[0], shape[1]
-    num_units = outputs.get_shape().as_list()[-1]
+    max_time = shape[1]
     paddings = [[0, 0], [0, tf.floormod(max_time, 2)], [0, 0]]
     outputs = tf.pad(outputs, paddings)
 
-    '''
     even_time = outputs[:, ::2, :]
     odd_time = outputs[:, 1::2, :]
 
-    concat_outputs = tf.concat([even_time, odd_time], -1)
-    '''
-
-    concat_outputs = tf.reshape(outputs, (batch_size, -1, num_units * 2))
+    concat_outputs = even_time + odd_time
 
     return concat_outputs, tf.floordiv(sequence_length, 2) + tf.floormod(sequence_length, 2)
 
@@ -77,8 +72,8 @@ def pyramidal_bilstm(inputs,
             outputs, state = bilstm(
                 outputs, sequence_length, hparams.num_units, hparams.dropout, mode,
                 hparams.unidirectional)
-
-            outputs = tf.concat(outputs, -1)
+            if not hparams.unidirectional:
+                outputs = outputs[0] + outputs[1]
 
             if layer != 0:
                 outputs, sequence_length = pyramidal_stack(
