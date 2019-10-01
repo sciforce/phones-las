@@ -20,6 +20,8 @@ def parse_args():
                         help='normalization params')
     parser.add_argument('--model_dir', type=str, required=True,
                         help='path of imported model')
+    parser.add_argument('--binf_map', type=str, default='misc/binf_map.csv',
+                        help='Path to CSV with phonemes to binary features map')
     parser.add_argument('--beam_width', type=int, default=0,
                         help='number of beams (default 0: using greedy decoding)')
     parser.add_argument('--batch_size', type=int, default=8,
@@ -43,10 +45,18 @@ def main(args):
     hparams.decoder.set_hparam('beam_width', args.beam_width)
 
     vocab_list = utils.load_vocab(args.vocab)
+    if args.binf_map == 'no':
+        binf2phone_np = None
+        pred_key = 'sample_ids'
+    else:
+        binf2phone = utils.load_binf2phone(args.binf_map, vocab_list)
+        binf2phone_np = binf2phone.values
+        pred_key = 'sample_ids_phones_binf'
 
     def model_fn(features, labels,
                  mode, config, params):
-        return las_model_fn(features, labels, mode, config, params)
+        return las_model_fn(features, labels, mode, config, params,
+                            binf2phone=binf2phone_np)
 
     model = tf.estimator.Estimator(
         model_fn=model_fn,
@@ -57,7 +67,7 @@ def main(args):
         input_fn=lambda: utils.input_fn(
             args.data, args.vocab, args.norm, num_channels=args.num_channels, batch_size=args.batch_size,
             is_infer=True),
-        predict_keys=['sample_ids_phones_binf'])
+        predict_keys=[pred_key])
 
     targets, seed_data = [], {}
     for line in open(os.path.join(args.data_dir, 'train.csv'), 'r'):
@@ -73,7 +83,7 @@ def main(args):
             if target[0] not in seed_data:
                 if np.random.rand() > args.keep_elem_prob:
                     continue
-                beams = p['sample_ids_phones_binf'].T
+                beams = p[pred_key].T
                 i = beams.tolist() + [utils.EOS_ID]
                 i = i[:i.index(utils.EOS_ID)]
                 text = to_text(vocab_list, i)

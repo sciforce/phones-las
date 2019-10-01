@@ -17,6 +17,17 @@ GRAD_NORM = 2
 NOISE_MEAN = 0.0
 
 
+def antipersistence_loss(logits, final_sequence_length):
+    weights = tf.sequence_mask(final_sequence_length, maxlen=logits.shape[1].value, dtype=tf.float32)
+    logits -= tf.reduce_max(logits, axis=2, keepdims=True)
+    logits = tf.clip_by_value(logits, -1, 0)
+    distances = tf.reduce_mean(tf.abs(logits[:, 1:, :] - logits[:, :-1, :]), axis=-1, keepdims=False)
+    deltas = -tf.reduce_sum(distances * weights[:, :-1], axis=-1, keepdims=False)
+    deltas = deltas / tf.reduce_sum(weights, axis=-1, keepdims=False)
+    deltas = tf.reduce_mean(deltas)
+    return deltas
+
+
 def compute_loss(logits, targets, final_sequence_length, target_sequence_length, mode, eos_id):
 
     assert mode != tf.estimator.ModeKeys.PREDICT
@@ -311,6 +322,9 @@ def las_model_fn(features,
         with tf.name_scope('cross_entropy'):
             audio_loss_ipa = compute_loss(
                 logits, targets, final_sequence_length, target_sequence_length, mode, params.decoder.eos_id)
+            antip_loss = antipersistence_loss(logits, final_sequence_length)
+            audio_loss_ipa += antip_loss
+            tf.summary.scalar('antip_loss', antip_loss)
 
     if logits_binf is not None:
         with tf.name_scope('cross_entropy_binf'):
@@ -319,6 +333,9 @@ def las_model_fn(features,
                     logits_binf, targets, final_sequence_length_binf, target_sequence_length, mode, params.decoder.eos_id)
                 if raw_rnn_outputs is not None:
                     audio_loss_binf += compute_log_probs_loss(raw_rnn_outputs) * params.decoder.binf_projection_reg_weight
+                antip_loss = antipersistence_loss(logits_binf, final_sequence_length_binf)
+                audio_loss_binf += antip_loss
+                tf.summary.scalar('antip_loss', antip_loss)
             else:
                 if mode == tf.estimator.ModeKeys.TRAIN:
                     audio_loss_binf = compute_loss_sigmoid(logits_binf, targets_binf,

@@ -197,6 +197,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
         dataset = dataset.repeat(num_epochs if num_epochs > 0 else None)
 
         if not is_infer:
+            tf.logging.info('Shuffling dataset.')
             dataset = dataset.shuffle(output_buffer_size)
 
         dataset = dataset.map(
