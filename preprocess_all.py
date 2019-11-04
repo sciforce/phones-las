@@ -8,7 +8,6 @@ from multiprocessing import Lock
 from joblib import Parallel, delayed, dump
 from argparse import ArgumentParser
 from speechpy.feature import mfe, mfcc, extract_derivative_feature
-import sys
 
 from utils import get_ipa, ipa2binf, load_binf2phone, IPAError
 from lyon.calc import LyonCalc
@@ -26,6 +25,7 @@ tfrecord_mutex = Lock()
 stats_mutex = Lock()
 binf2phone = None
 lyon_calc = LyonCalc()
+
 
 def make_example(input, label):
     if isinstance(label, list):
