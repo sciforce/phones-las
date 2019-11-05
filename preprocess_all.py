@@ -135,8 +135,7 @@ def build_features_and_vocabulary_fn(args, inputs):
     if args.targets in ('phones', 'binary_features'):
         if language not in ['arpabet', 'ipa']:
             text = ' '.join(text)
-            text = get_ipa(text, language, remove_all_diacritics=args.remove_diacritics,
-                split_all_diphthongs=args.split_diphthongs)
+            text = get_ipa(text, language, split_all_diphthongs=args.split_diphthongs)
         if args.targets == 'binary_features':
             binf = ipa2binf(text, binf2phone, 'ipa'==language)
     elif args.targets == 'chars':
@@ -211,8 +210,6 @@ if __name__ == "__main__":
                         choices=['words', 'phones', 'binary_features', 'chars'], default='words')
     parser.add_argument('--binf_map', help='Path to CSV with phonemes to binary features map',
                         type=str, default='misc/binf_map.csv')
-    parser.add_argument('--remove_diacritics', help='Remove diacritics from IPA targets',
-                        action='store_true')
     parser.add_argument('--split_diphthongs', help='Remove diacritics from IPA targets',
                         action='store_true')
     parser.add_argument('--start', help='Index of example to start from', type=int, default=0)
