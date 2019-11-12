@@ -135,9 +135,10 @@ def build_features_and_vocabulary_fn(args, inputs):
     if args.targets in ('phones', 'binary_features'):
         if language not in ['arpabet', 'ipa']:
             text = ' '.join(text)
-            text = get_ipa(text, language, split_all_diphthongs=args.split_diphthongs)
+            # Diphthongs, stress and gemination are split because they are not present in current IPA mapping.
+            text = get_ipa(text, language, split_all_diphthongs=True, split_stress_gemination=True)
         if args.targets == 'binary_features':
-            binf = ipa2binf(text, binf2phone, 'ipa'==language)
+            binf = ipa2binf(text, binf2phone, 'ipa' == language)
     elif args.targets == 'chars':
         text = [c for c in ' '.join(text)]
     vocabulary.update(text)
@@ -210,8 +211,6 @@ if __name__ == "__main__":
                         choices=['words', 'phones', 'binary_features', 'chars'], default='words')
     parser.add_argument('--binf_map', help='Path to CSV with phonemes to binary features map',
                         type=str, default='misc/binf_map.csv')
-    parser.add_argument('--split_diphthongs', help='Remove diacritics from IPA targets',
-                        action='store_true')
     parser.add_argument('--start', help='Index of example to start from', type=int, default=0)
     parser.add_argument('--count', help='Maximal phrases count, -1 for all phrases', type=int, default=-1)
     parser.add_argument('--delimiter', help='CSV delimiter', type=str, default=',')
