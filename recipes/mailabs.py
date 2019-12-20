@@ -23,7 +23,7 @@ for root, _, files in tqdm(os.walk(args.data_path), desc='Collecting filenames')
                 text = text_data['clean'].lower().strip().replace(',', '')
                 audio_path = os.path.join(root, 'wavs', audio_filename)
                 write_text = '{},{},{}\n'.format(audio_path, args.language, text)
-                if os.path.basename(root) in args.dev_speakers:
+                if os.path.basename(os.path.dirname(root)) in args.dev_speakers:
                     output_dev.write(write_text)
                 else:
                     output_train.write(write_text)
