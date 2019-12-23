@@ -81,7 +81,7 @@ def calculate_acoustic_features(args, waveform):
                 hop_length=hop_length, n_mels=args.n_mels)
             acoustic_features = librosa.core.amplitude_to_db(spec).transpose()
             if args.energy:
-                energy = librosa.feature.rmse(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
+                energy = librosa.feature.rms(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
                 acoustic_features = np.hstack((acoustic_features, energy))
     elif 'mfcc' == args.feature_type:
         if args.backend=='speechpy':
@@ -92,7 +92,7 @@ def calculate_acoustic_features(args, waveform):
             acoustic_features = librosa.feature.mfcc(y=waveform, sr=SAMPLE_RATE, n_mfcc=args.n_mfcc,
                 n_fft=n_fft, hop_length=hop_length, n_mels=args.n_mels).transpose()
             if args.energy:
-                energy = librosa.feature.rmse(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
+                energy = librosa.feature.rms(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
                 acoustic_features = np.hstack((acoustic_features, energy))
     elif 'lyon' == args.feature_type:
         waveform /= np.abs(waveform).max()
@@ -135,8 +135,7 @@ def build_features_and_vocabulary_fn(args, inputs):
     if args.targets in ('phones', 'binary_features'):
         if language not in ['arpabet', 'ipa']:
             text = ' '.join(text)
-            # Diphthongs, stress and gemination are split because they are not present in current IPA mapping.
-            text = get_ipa(text, language, split_all_diphthongs=True, split_stress_gemination=True)
+            text = get_ipa(text, language, split_all_diphthongs=True, remove_all_stress=True)
         if args.targets == 'binary_features':
             binf = ipa2binf(text, binf2phone, 'ipa' == language)
     elif args.targets == 'chars':

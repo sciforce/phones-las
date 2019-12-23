@@ -407,7 +407,7 @@ def las_model_fn(features,
         audio_loss = audio_loss + reg_term
 
         gvs = optimizer.compute_gradients(audio_loss, var_list=var_list)
-        capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs]
+        capped_gvs = [(tf.clip_by_norm(grad, GRAD_NORM), var) for grad, var in gvs if grad is not None]
         train_op = optimizer.apply_gradients(capped_gvs, global_step=tf.train.get_global_step())
         if params.add_noise > 0:
             def add_noise():
