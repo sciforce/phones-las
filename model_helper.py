@@ -261,7 +261,7 @@ def las_model_fn(features,
                 emb_c, emb_h = encoder_state.c, encoder_state.h
             except:
                 emb_c, emb_h = None, None
-        if emb_c and emb_h:
+        if emb_c is not None and emb_h is not None:
             emb = tf.stack([emb_c, emb_h], axis=1)
             predictions['embedding'] = emb
         if sample_ids_phones is not None:
