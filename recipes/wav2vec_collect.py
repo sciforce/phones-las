@@ -20,9 +20,9 @@ if __name__ == '__main__':
         with tf.io.TFRecordWriter(args.output_file) as writer:
             for line in tqdm(f):
                 p, _, phones = line.strip().split(',')
-                h5_p = '_'.join(p.split('/')[-3:]).lower().replace('.wav', '.h5context')
+                h5_p = p.replace(args.replace_dir, args.data_dir).replace('.wav', '.h5context')
                 with h5py.File(os.path.join(args.data_dir, h5_p), 'r') as h5_f:
                     shape = np.array(h5_f['info'])
                     features = np.array(h5_f['features']).reshape([int(shape[1]), int(shape[2])])
-                phones = phones.split(' ')
+                phones = list(phones)
                 writer.write(make_example(features, phones).SerializeToString())
