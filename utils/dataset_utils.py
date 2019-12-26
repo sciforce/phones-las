@@ -184,7 +184,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
                 },
             drop_remainder=True)
     else:
-        output_buffer_size = batch_size * 1000
+        output_buffer_size = batch_size * 500
 
         if max_frames > 0:
             dataset = dataset.filter(

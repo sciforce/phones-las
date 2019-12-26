@@ -38,9 +38,11 @@ VOWELS_CORE = [v for v in VOWELS if len(v) == 1]
 
 voices = [l['language'] for l in engine.voices]
 
+
 def _japanese_preprocessing(text):
     #TODO: replace Kanji by Hiragana/Katakana
     return text
+
 
 def _preprocessing(text, language):
     if language == 'ja':
@@ -54,6 +56,7 @@ def _preprocessing(text, language):
     #remove punctuation (otherwise eSpeak will not return spaces)
     text = re.sub(r'([^\w\s])', '', text)
     return text
+
 
 def _postprocessing(ipa, language, remove_all_stress=False,
     remove_semi_stress=False,
@@ -88,6 +91,7 @@ def _postprocessing(ipa, language, remove_all_stress=False,
         ipa = _split_stress_gemination(ipa)
     return ipa
 
+
 def _split_stress_gemination(ipa):
     out = []
     for phone in ipa:
@@ -103,6 +107,7 @@ def _split_stress_gemination(ipa):
             out.append(gemination)
     return out
 
+
 def _postprocess_double_consonants(text):
     out_text = []
     for i, _ in enumerate(text):
@@ -116,11 +121,13 @@ def _postprocess_double_consonants(text):
             out_text.append(text[i])
     return out_text
 
+
 def _postprocess_double_vowels(text):
     for i, _ in enumerate(text):
         for vow in VOWELS:
             text[i] = re.sub('([ˈ|ˌ]?{vow}\w?){vow}\w?'.format(vow=vow), r'\1ː', text[i])
     return text
+
 
 def _process_diphthongs(text, split_all_diphthongs=False):
     # split triphthongs
@@ -255,6 +262,7 @@ def _postprocess_by_languages(text, language, split_all_diphthongs):
 
     return text
 
+
 def get_ipa(text, language, **kwargs):
     engine.voice = language
     text = _preprocessing(text, engine.voice)
@@ -276,6 +284,7 @@ def get_ipa(text, language, **kwargs):
     if not ipa:
         raise IPAError('IPA is empty')
     return _postprocessing(ipa, engine.voice, **kwargs)
+
 
 def get_mapping(mapping_path, vocab_path):
     with open(mapping_path, 'r') as fid:
@@ -300,6 +309,7 @@ def get_mapping(mapping_path, vocab_path):
             int_mapping.append(-1)
     return new_vocab, int_mapping
 
+
 def load_binf2phone(filename, vocab_list=None):
     binf2phone = pd.read_csv(filename, index_col=0)
     binf2phone.insert(UNK_ID, UNK, 1)
@@ -316,6 +326,7 @@ def load_binf2phone(filename, vocab_list=None):
         # Leave only phonemes from the vocabluary
         binf2phone = binf2phone[vocab_list]
     return binf2phone
+
 
 def ipa2binf(ipa, binf2phone, try_merge_diphtongs=False):
     binf = np.empty((len(ipa), len(binf2phone.index)), np.float32)
