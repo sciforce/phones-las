@@ -272,7 +272,8 @@ def las_model_fn(features,
             predictions['sample_ids_phones_binf'] = sample_ids_phones_binf
 
         if final_context_state is not None:
-            predictions['alignment'] = get_alignment_history(final_context_state, params)
+            alignment_source = final_context_state[0] if isinstance(final_context_state, tuple) else final_context_state
+            predictions['alignment'] = get_alignment_history(alignment_source, params)
         if final_context_state_binf is not None:
             predictions['alignment_binf'] = get_alignment_history(final_context_state_binf, params)
 
@@ -367,21 +368,17 @@ def las_model_fn(features,
             run_name = 'eval_{}'.format(run_name)
         attention_summary = tf.summary.image(
             'attention_images', attention_images)
-        eval_summary_hook = tf.train.SummarySaverHook(
-            save_steps=20,
-            output_dir=os.path.join(config.model_dir, run_name),
-            summary_op=attention_summary)
-        hooks = [eval_summary_hook]
+        summaries = [attention_summary]
         if binf_embedding is not None:
             with tf.name_scope('binf_image'):
                 binf_image = binf_embedding[None, :, :, None]
             binf_summary = tf.summary.image('binf_image', binf_image)
-            binf_hook = tf.train.SummarySaverHook(
-                save_steps=20,
-                output_dir=os.path.join(config.model_dir, run_name),
-                summary_op=binf_summary
-            )
-            hooks.append(binf_hook)
+            summaries.append(binf_summary)
+        eval_summary_hook = tf.train.SummarySaverHook(
+            save_steps=20,
+            output_dir=os.path.join(config.model_dir, run_name),
+            summary_op=summaries)
+        hooks = [eval_summary_hook]
         loss = audio_loss
         log_data = {
             'edit_distance': tf.reduce_mean(edit_distance if edit_distance is not None else edit_distance_binf),
