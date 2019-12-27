@@ -149,7 +149,6 @@ def read_dataset(filename, num_channels=39):
         filename = [x.strip() for x in open(filename, 'r').readlines()]
     dataset = tf.data.TFRecordDataset(filename, num_parallel_reads=4)
     dataset = dataset.map(parse_fn)
-    dataset = dataset.cache()
 
     return dataset
 

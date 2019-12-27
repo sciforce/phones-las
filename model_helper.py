@@ -272,7 +272,8 @@ def las_model_fn(features,
             predictions['sample_ids_phones_binf'] = sample_ids_phones_binf
 
         if final_context_state is not None:
-            predictions['alignment'] = get_alignment_history(final_context_state, params)
+            alignment_source = final_context_state[0] if isinstance(final_context_state, tuple) else final_context_state
+            predictions['alignment'] = get_alignment_history(alignment_source, params)
         if final_context_state_binf is not None:
             predictions['alignment_binf'] = get_alignment_history(final_context_state_binf, params)
 
