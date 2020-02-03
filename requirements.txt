@@ -9,7 +9,7 @@ Markdown==2.6.11
 numpy==1.16.1
 protobuf==3.7.0
 six==1.11.0
-tensorflow==1.15.0
+tensorflow==1.15.2
 termcolor==1.1.0
 Werkzeug==0.15.3
 tqdm==4.29.1
