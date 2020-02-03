@@ -8,10 +8,13 @@ from multiprocessing import Lock
 from joblib import Parallel, delayed, dump
 from argparse import ArgumentParser
 from speechpy.feature import mfe, mfcc, extract_derivative_feature
+import warnings
 
 from utils import get_ipa, ipa2binf, load_binf2phone, IPAError
 from lyon.calc import LyonCalc
 
+
+warnings.filterwarnings("ignore", message="PySoundFile failed. Trying audioread instead")
 
 SAMPLE_RATE = 16000
 
