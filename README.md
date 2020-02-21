@@ -16,6 +16,17 @@ Our contributions:
 
 ### Requirements
 Run `pip install -r requirements.txt` to get the necessary version.
+
+To load mp3 files you need to have ffmpeg installed.
+        
+- conda: `conda install -c conda-forge ffmpeg`
+
+- Linux: `apt-get install ffmpeg` or `apt-get install gstreamer1.0-plugins-base gstreamer1.0-plugins-ugly`
+        
+- Mac: `brew install ffmpeg` or `brew install gstreamer`
+
+For GStreamer also install the Python bindings with `pip install pygobject`.
+        
 To do training on phone targets, you'll need `espeak-ng` installed.
 
 ### Data Preparing
