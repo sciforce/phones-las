@@ -15,6 +15,14 @@ types = ['train', 'dev', 'test']
 langs = [d for d in os.listdir(args.cv_path)
          if os.path.isdir(os.path.join(args.cv_path, d))]
 
+lang_code_map = {
+    'portuguese': 'pt',
+    'turkish': 'tk',
+    'english': 'en',
+    'german': 'de',
+    'french': 'fr'
+}
+
 for l in langs:
     if args.lang is not None and l != args.lang:
         continue
@@ -27,5 +35,5 @@ for l in langs:
                 for row in tqdm(reader, desc='Processing {}-{}'.format(l, t), unit='file'):
                     utt_id, media_name, label = row[:3]
                     audio_path = os.path.join(args.cv_path, l, 'clips', media_name)
-                    write_text = '{},{},{}\n'.format(audio_path, l, label.strip().replace(',', ''))
+                    write_text = '{},{},{}\n'.format(audio_path, lang_code_map.get(l, l), label.strip().replace(',', ''))
                     output.write(write_text)
