@@ -146,7 +146,7 @@ def build_features_and_vocabulary_fn(args, inputs):
         text = [c for c in ' '.join(text)]
     vocabulary.update(text)
     acoustic_features = calculate_acoustic_features(args, waveform)
-    if args.norm_file:
+    if args.save_norm:
         with stats_mutex:
             if means is None:
                 means = np.mean(acoustic_features, axis=0)

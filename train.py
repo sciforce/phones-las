@@ -109,8 +109,9 @@ def parse_args():
     return parser.parse_args()
 
 def main(args):
-    vocab_name = os.path.join(args.train, 'vocab.txt')
-    norm_name = os.path.join(args.train, 'norm.dmp')
+    train_dir = os.path.dirname(args.train)
+    vocab_name = os.path.join(train_dir, 'vocab.txt')
+    norm_name = os.path.join(train_dir, 'norm.dmp')
     vocab_list = utils.load_vocab(vocab_name)
     binf2phone_np = None
     mapping = None
@@ -118,7 +119,7 @@ def main(args):
     binf_count = None
     if args.binary_outputs:
         if args.mapping is not None:
-            vocab_list, mapping = utils.get_mapping(args.mapping, args.vocab)
+            vocab_list, mapping = utils.get_mapping(args.mapping, vocab_name)
             args.mapping = None
         binf2phone = utils.load_binf2phone(args.binf_map, vocab_list)
         binf_count = len(binf2phone.index)
@@ -174,7 +175,7 @@ def main(args):
         else:
             return lambda params: utils.input_fn(
                 args.valid if mode == tf.estimator.ModeKeys.EVAL and args.valid else args.train,
-                args.vocab, norm_name,
+                vocab_name, norm_name,
                 num_channels=args.num_channels if args.num_channels is not None else hparams.get_hparam('num_channels'),
                 batch_size=params.batch_size if 'batch_size' in params else args.batch_size,
                 num_epochs=args.num_epochs if mode == tf.estimator.ModeKeys.TRAIN else 1,
