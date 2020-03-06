@@ -2,6 +2,7 @@ from collections import Counter
 import librosa
 import tensorflow as tf
 import numpy as np
+import os
 import warnings
 from tqdm import tqdm
 from multiprocessing import Lock
@@ -195,9 +196,9 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--input_file', help='File with audio paths and texts.', required=True)
     parser.add_argument('--output_file', help='Target TFRecord file name.', required=True)
-    parser.add_argument('--norm_file', help='File name for normalization data.', default=None)
-    parser.add_argument('--vocab_file', help='Vocabulary file name.', default=None)
     parser.add_argument('--top_k', help='Max size of vocabulary.', type=int, default=1000)
+    parser.add_argument('--save_norm', action='store_true', help='Specify if you want to save norm data')
+    parser.add_argument('--save_vocab', action='store_true', help='Specify if you want to save vocabulary')
     parser.add_argument('--feature_type', help='Acoustic feature type.', type=str,
                         choices=['mfe', 'mfcc', 'lyon'], default='mfcc')
     parser.add_argument('--backend', help='Library for calculating acoustic features.', type=str,
@@ -218,6 +219,10 @@ if __name__ == "__main__":
     parser.add_argument('--delimiter', help='CSV delimiter', type=str, default=',')
     args = parser.parse_args()
 
+    output_dir = os.path.dirname(args.output_file)
+    vocab_path = os.path.join(output_dir, 'vocab.txt')
+    norm_path = os.path.join(output_dir, 'norm.dmp')
+
     if args.targets in ('phones', 'binary_features'):
         binf2phone = load_binf2phone(args.binf_map)
     if args.feature_type == 'lyon' or args.backend == 'speechpy':
@@ -230,7 +235,7 @@ if __name__ == "__main__":
 
     count = len(lines) - args.start
     if args.count > 0 and args.count < len(lines):
-        count == args.count
+        count = args.count
     lines = lines[args.start:count+args.start]
 
     par_handle = tqdm(unit='sound')
@@ -242,9 +247,9 @@ if __name__ == "__main__":
                 process_line(args, writer, x)
     session.close()
     par_handle.close()
-    if args.norm_file is not None:
-        dump([means / total, stds / total], args.norm_file)
-    if args.vocab_file is not None:
-        with open(args.vocab_file, 'w') as f:
+    if args.save_norm:
+        dump([means / total, stds / total], norm_path)
+    if args.save_vocab:
+        with open(vocab_path, 'w') as f:
             for x, _ in vocabulary.most_common(args.top_k):
                 f.write(x + '\n')

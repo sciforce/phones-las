@@ -21,6 +21,10 @@ class HParams(tf_contrib.training.HParams):
 
         return value
 
+    def get_hparam(self, name):
+        value = getattr(self, name)
+        return value
+
     def save_to_file(self, filename):
         with tf.io.gfile.GFile(filename, 'w') as f:
             json.dump(self.to_json(), f)
@@ -38,6 +42,7 @@ def get_default_hparams():
         tpu_name='',
         max_frames=-1,
         max_symbols=-1,
+        num_channels=39,
 
         # encoder setting
         encoder_layers=3,
@@ -83,10 +88,10 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
     if tf.io.gfile.exists(hparams_file) and not is_reset:
         with tf.io.gfile.GFile(hparams_file, 'r') as f:
             hparams_dict = json.loads(json.load(f))
-
         for name, value in vars(args).items():
             if name not in hparams_dict:
                 hparams_dict[name] = value
+
     else:
         if target_vocab_size is None:
             raise ValueError('Target vocabulary size is not specified.')
@@ -95,7 +100,6 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
             **{'sos_id': sos_id, 'eos_id': eos_id, 'target_vocab_size': target_vocab_size,
                'binf_count': binf_count},
         }
-
     for name, value in hparams.values().items():
         value = hparams_dict.get(name, None)
         if value is not None:
@@ -106,11 +110,9 @@ def create_hparams(args, target_vocab_size=None, binf_count=None, sos_id=1, eos_
                 hparams.add_hparam(name, value)
             else:
                 hparams.set_hparam(name, value)
-
     if not tf.io.gfile.exists(args.model_dir):
         tf.io.gfile.mkdir(args.model_dir)
     hparams.save_to_file(hparams_file)
-
     return get_encoder_decoder_hparams(hparams)
 
 
@@ -131,6 +133,7 @@ def get_encoder_decoder_hparams(hparams):
     binf_projection_reg_weight = hparams.pop_hparam('binf_projection_reg_weight')
     binf_trainable = hparams.pop_hparam('binf_trainable')
     multitask = hparams.pop_hparam('multitask')
+    num_channels = hparams.pop_hparam('num_channels')
 
     encoder_hparams = HParams(
         num_layers=hparams.pop_hparam('encoder_layers'),
@@ -164,5 +167,6 @@ def get_encoder_decoder_hparams(hparams):
         tpu_name=tpu_name,
         max_frames=max_frames,
         max_symbols=max_symbols,
+        num_channels=num_channels,
         encoder=encoder_hparams,
         decoder=decoder_hparams)
