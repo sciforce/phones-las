@@ -1,4 +1,5 @@
 import tensorflow as tf
+import os
 import tensorflow.contrib as tf_contrib
 import numpy as np
 from tensor2tensor.data_generators.speech_recognition import SpeechRecognitionProblem
@@ -280,7 +281,7 @@ def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=
     dataset = read_dataset(dataset_filename, num_channels)
     vocab_table = utils.create_vocab_table(vocab_filename)
 
-    if norm_filename is not None:
+    if norm_filename is not None and os.path.exists(norm_filename):
         means, stds = utils.load_normalization(norm_filename)
     else:
         means = stds = None
