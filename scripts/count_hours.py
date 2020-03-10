@@ -1,6 +1,9 @@
-import warnings
 import argparse
+import warnings
+
 import librosa
+from tqdm import tqdm
+
 SAMPLE_RATE = 16000
 
 
@@ -25,14 +28,12 @@ def process_line(args, line):
 
 
 def main(args):
-    lines = open(args.input_file, 'r').readlines()
-    count = len(lines) - args.start
-    lines = lines[args.start:count + args.start]
-    total = 0
-    for x in lines:
-        total += process_line(args, x)
-    total /= 3600
-    print(total)
+    with open(args.input_file) as f:
+        total = 0
+        for x in tqdm(f):
+            total += process_line(args, x)
+        total /= 3600
+        print('Hours: ', total)
 
 
 if __name__ == '__main__':
