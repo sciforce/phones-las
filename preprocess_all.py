@@ -12,7 +12,6 @@ from speechpy.feature import mfe, mfcc, extract_derivative_feature
 import warnings
 
 from utils import get_ipa, ipa2binf, load_binf2phone, IPAError
-from lyon.calc import LyonCalc
 
 
 warnings.filterwarnings("ignore", message="PySoundFile failed. Trying audioread instead")
@@ -28,7 +27,6 @@ session = tf.Session()
 tfrecord_mutex = Lock()
 stats_mutex = Lock()
 binf2phone = None
-lyon_calc = LyonCalc()
 
 
 def make_example(input, label):
@@ -99,6 +97,9 @@ def calculate_acoustic_features(args, waveform):
                 energy = librosa.feature.rms(y=waveform, frame_length=n_fft, hop_length=hop_length).transpose()
                 acoustic_features = np.hstack((acoustic_features, energy))
     elif 'lyon' == args.feature_type:
+        from lyon.calc import LyonCalc
+        lyon_calc = LyonCalc()
+
         waveform /= np.abs(waveform).max()
         acoustic_features = lyon_calc.lyon_passive_ear(waveform[:, np.newaxis].astype(np.double),
                                                        SAMPLE_RATE, hop_length)
