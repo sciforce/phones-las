@@ -29,6 +29,19 @@ For GStreamer also install the Python bindings with `pip install pygobject`.
         
 To do training on phone targets, you'll need `espeak-ng` installed.
 
+### espeak-ng Mac installation
+
+It should be build locally. Clone espeak-ng repository.
+Then run:
+
+```shell script
+./configure --exec-prefix=/usr/local/ --datarootdir=/usr/local --sysconfdir=/usr/local --sharedstatedir=/usr/local --localstatedir=/usr/local --includedir=/usr/local --with-extdict-ru --with-extdict-zh --with-extdict-zhy
+
+make 
+
+sudo make LIBDIR=/usr/local/lib install
+```
+
 ### Data Preparing
 Before running the training script, you should convert your data into TFRecord format, collect normalization data and prepare vocabulary.
 To do that, collect your train and test data in separate CSV files like this:
