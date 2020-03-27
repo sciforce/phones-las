@@ -3,7 +3,6 @@ import librosa
 import tensorflow as tf
 import numpy as np
 import os
-import warnings
 from tqdm import tqdm
 from multiprocessing import Lock
 from joblib import Parallel, delayed, dump
@@ -210,7 +209,7 @@ if __name__ == "__main__":
     parser.add_argument('--window', help='Analysis window length in ms.', type=int, default=20)
     parser.add_argument('--step', help='Analysis window step in ms.', type=int, default=10)
     parser.add_argument('--deltas', help='Calculate deltas and double-deltas.', action='store_true')
-    parser.add_argument('--n_jobs', help='Number of parallel jobs.', type=int, default=4)
+    parser.add_argument('--n_jobs', help='Number of parallel jobs.', type=int, default=1)
     parser.add_argument('--targets', help='Determines targets type.', type=str,
                         choices=['words', 'phones', 'binary_features', 'chars'], default='words')
     parser.add_argument('--binf_map', help='Path to CSV with phonemes to binary features map',
