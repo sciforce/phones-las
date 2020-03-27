@@ -222,7 +222,7 @@ python train.py --train ./model/train.tfr --valid ./model/dev.tfr --model_dir ./
 ```
 After some time you may want to decrease learning rate. To do that, stop training and restart it:
 ```bash script
-python train.py --model_dir ./model --learning_rate 1e-5 --reset
+python train.py --train ./model/train.tfr --valid ./model/dev.tfr --model_dir ./model --learning_rate 1e-5
 ```
 
 #### Phones targets with indicators proxy
