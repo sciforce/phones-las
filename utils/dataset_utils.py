@@ -1,15 +1,18 @@
 import tensorflow as tf
 import os
-import tensorflow.contrib as tf_contrib
-import numpy as np
 from tensor2tensor.data_generators.speech_recognition import SpeechRecognitionProblem
 from tensor2tensor.models.transformer import transformer_librispeech_tpu
 import utils
 
 __all__ = [
     'input_fn',
-    'input_fn_t2t'
+    'input_fn_t2t',
+    'process_dataset',
+    'read_dataset',
+    'process_dataset_t2t_format',
+    'read_dataset_t2t_format'
 ]
+
 
 def read_dataset_t2t_format(data_dir, num_parallel_calls, mode, max_frames, max_symbols, t2t_problem_name,
     features_hparams_override=''):
@@ -25,6 +28,7 @@ def read_dataset_t2t_format(data_dir, num_parallel_calls, mode, max_frames, max_
     speech_params.max_target_seq_length = max_symbols
     dataset = problem.dataset(mode, data_dir=data_dir, num_threads=num_parallel_calls, hparams=speech_params)
     return dataset
+
 
 def process_dataset_t2t_format(dataset, sos_id, eos_id,
     batch_size=8, num_epochs=1, num_parallel_calls=32, is_infer=False,
@@ -113,6 +117,7 @@ def process_dataset_t2t_format(dataset, sos_id, eos_id,
 
     return dataset
 
+
 def input_fn_t2t(data_dir, mode, hparams, t2t_problem_name, batch_size=8, num_epochs=1,
     num_parallel_calls=32, max_frames=-1, max_symbols=-1, take=0, features_hparams_override=''):
     dataset = read_dataset_t2t_format(data_dir, num_parallel_calls, mode, max_frames,
@@ -128,6 +133,7 @@ def input_fn_t2t(data_dir, mode, hparams, t2t_problem_name, batch_size=8, num_ep
         dataset = dataset.take(take)
 
     return dataset
+
 
 def read_dataset(filename, num_channels=39):
     """Read data from tfrecord file."""
@@ -155,8 +161,8 @@ def read_dataset(filename, num_channels=39):
 
 
 def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
-    batch_size=8, num_epochs=1, num_parallel_calls=32, is_infer=False,
-    max_frames=-1, max_symbols=-1):
+                    batch_size=8, num_epochs=1, num_parallel_calls=32, is_infer=False,
+                    max_frames=-1, max_symbols=-1):
 
     try:
         use_labels = len(dataset.output_classes) == 2
@@ -275,6 +281,7 @@ def process_dataset(dataset, vocab_table, sos, eos, means=None, stds=None,
             drop_remainder=True)
 
     return dataset
+
 
 def input_fn(dataset_filename, vocab_filename, norm_filename=None, num_channels=39, batch_size=8, num_epochs=1,
     num_parallel_calls=32, max_frames=-1, max_symbols=-1, take=0, is_infer=False):
