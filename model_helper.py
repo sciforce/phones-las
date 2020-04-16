@@ -168,7 +168,8 @@ def las_model_fn(features,
                  config,
                  params,
                  binf2phone=None,
-                 run_name=None):
+                 run_name=None,
+                 transparent_projection=False):
     encoder_inputs = features['encoder_inputs']
     source_sequence_length = features['source_sequence_length']
 
@@ -213,7 +214,7 @@ def las_model_fn(features,
             decoder_outputs, final_context_state, final_sequence_length = las.model.speller(
                 encoder_outputs, encoder_state, decoder_inputs,
                 source_sequence_length, target_sequence_length,
-                mode, params.decoder)
+                mode, params.decoder, transparent_projection=transparent_projection)
 
     decoder_outputs_binf, final_context_state_binf, final_sequence_length_binf, raw_rnn_outputs = None, None, None, None
     if params.decoder.binary_outputs:
@@ -222,7 +223,8 @@ def las_model_fn(features,
                 encoder_outputs, encoder_state, decoder_inputs_binf if not params.decoder.binf_projection else decoder_inputs,
                 source_sequence_length, target_sequence_length,
                 mode, params.decoder, not params.decoder.binf_projection,
-                binf_embedding if not params.decoder.binf_sampling or params.decoder.beam_width > 0 else None)
+                binf_embedding if not params.decoder.binf_sampling or params.decoder.beam_width > 0 else None,
+                transparent_projection=transparent_projection)
 
     sample_ids_phones_binf, sample_ids_phones, sample_ids_binf, logits_binf, logits = None, None, None, None, None
     with tf.name_scope('prediction'):
@@ -242,7 +244,7 @@ def las_model_fn(features,
                     raw_rnn_outputs = logits_binf[..., binf2phone.shape[-1]:]
                     logits_binf = logits_binf[..., :binf2phone.shape[-1]]
 
-                if params.decoder.binary_outputs and params.decoder.binf_sampling:
+                if params.decoder.binary_outputs and (params.decoder.binf_sampling or transparent_projection):
                     logits_phones_binf = transform_binf_to_phones(logits_binf, binf_embedding)
                     sample_ids_phones_binf = tf.to_int32(tf.argmax(logits_phones_binf, -1))
                 else:
@@ -282,6 +284,13 @@ def las_model_fn(features,
                 predictions['probs'] = tf.nn.sigmoid(logits_binf)
             elif logits is not None:
                 predictions['probs'] = tf.nn.softmax(logits)
+            elif transparent_projection and logits_binf is not None:
+                # logits are not strictly normalized, apply normalization manually
+                one_zero_probs = tf.exp(logits_binf - tf.reduce_max(logits_binf, axis=-1, keepdims=True))
+                n_features = logits_binf.shape[-1] // 2
+                one_probs = one_zero_probs[..., :n_features]
+                zero_probs = one_zero_probs[..., n_features:2 * n_features]
+                predictions['probs'] = one_probs / (one_probs + zero_probs)
             else:
                 predictions['probs'] = tf.nn.softmax(logits_binf)
 

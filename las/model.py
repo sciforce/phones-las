@@ -5,7 +5,8 @@ from tensorflow.python.util import nest
 
 from las.ops import lstm_cell
 from las.ops import pyramidal_bilstm
-from utils import TrainingSigmoidHelper, ScheduledSigmoidHelper, DenseBinfDecoder, TPUScheduledEmbeddingTrainingHelper
+from utils import TrainingSigmoidHelper, ScheduledSigmoidHelper, DenseBinfDecoder,\
+    TPUScheduledEmbeddingTrainingHelper, decoders_factory
 
 __all__ = [
     'listener',
@@ -209,7 +210,8 @@ def speller(encoder_outputs,
             mode,
             hparams,
             binary_outputs=False,
-            binf_embedding=None):
+            binf_embedding=None,
+            transparent_projection=False):
 
     batch_size = tf.shape(encoder_outputs)[0]
     beam_width = hparams.beam_width
@@ -338,7 +340,7 @@ def speller(encoder_outputs,
         helper = tf_contrib.seq2seq.GreedyEmbeddingHelper(
             embedding_fn, start_tokens, hparams.eos_id)
 
-        decoder = tf_contrib.seq2seq.BasicDecoder(
+        decoder = decoders_factory('basic_transparent' if transparent_projection else 'basic')(
             decoder_cell, helper, initial_state, output_layer=projection_layer)
 
     decoder_outputs, final_context_state, final_sequence_length = tf_contrib.seq2seq.dynamic_decode(
