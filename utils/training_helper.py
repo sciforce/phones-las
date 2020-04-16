@@ -9,7 +9,8 @@ __all__ = [
     'ScheduledSigmoidHelper',
     'TPUScheduledEmbeddingTrainingHelper',
     'DenseBinfDecoder',
-    'transform_binf_to_phones'
+    'transform_binf_to_phones',
+    'decoders_factory'
 ]
 
 
@@ -119,11 +120,11 @@ class ScheduledSigmoidHelper(TPUScheduledEmbeddingTrainingHelper):
 
 
 class DenseBinfDecoder(tf.layers.Dense):
-    '''
+    """
     Fully connected layer modification, which transforms
     original layer's outputs, assumed to be binary features logits,
     to phonemes logits.
-    '''
+    """
     def __init__(self, units, binf_to_ipa=None, inner_projection_layer=True,
                  concat_cell_outputs=False, **kwargs):
         self.binf_to_ipa = binf_to_ipa
@@ -150,3 +151,37 @@ class DenseBinfDecoder(tf.layers.Dense):
                 updated_dim_size += input_shape[-1]
             out = out[:-1].concatenate(updated_dim_size)
         return out
+
+
+class BasicTransparentProjectionDecoder(tf_contrib.seq2seq.BasicDecoder):
+    """
+    Runs as BasicDecoder, but outputs are returned as is, without going through projection.
+    """
+    def __init__(self, cell, helper, initial_state, output_layer):
+        super().__init__(cell, helper, initial_state, output_layer)
+
+    def _rnn_output_size(self):
+        return self._cell.output_size
+
+    def step(self, time, inputs, state, name=None):
+        with ops.name_scope(name, "BasicTransparentProjectionDecoderStep", (time, inputs, state)):
+            raw_cell_outputs, cell_state = self._cell(inputs, state)
+            cell_outputs = self._output_layer(raw_cell_outputs)
+            sample_ids = self._helper.sample(
+                time=time, outputs=cell_outputs, state=cell_state)
+            (finished, next_inputs, next_state) = self._helper.next_inputs(
+                time=time,
+                outputs=cell_outputs,
+                state=cell_state,
+                sample_ids=sample_ids)
+        outputs = tf_contrib.seq2seq.BasicDecoderOutput(raw_cell_outputs, sample_ids)
+        return outputs, next_state, next_inputs, finished
+
+
+def decoders_factory(decoder_str):
+    if decoder_str == 'basic':
+        return tf_contrib.seq2seq.BasicDecoder
+    elif decoder_str == 'basic_transparent':
+        return BasicTransparentProjectionDecoder
+    else:
+        raise ValueError('Unknown decoder.')

@@ -87,7 +87,7 @@ def main(args):
 
     def model_fn(features, labels, mode, config, params):
         return las_model_fn(features, labels, mode, config, params,
-                            binf2phone=binf2phone_np)
+                            binf2phone=binf2phone_np, transparent_projection=args.use_phones_from_binf)
 
     model = tf.estimator.Estimator(
         model_fn=model_fn,
