@@ -232,6 +232,23 @@ python train.py --train ./model/train.tfr --valid ./model/dev.tfr --model_dir ./
 
 For TIMIT use `--binf_map misc/binf_map_arpabet_extended.csv`.
 
+#### Training on textual data
+It is also possible to do training for purely text-to-text task. E.g. for training a G2P model on CMU dict.
+First form a dataset in CSV format, e.g.
+```text
+word,W O R D
+hello,HH E L L OW
+```
+To do so, run features collection:
+```shell script
+python text_preprocess --input_file ./model_g2p/train.csv --output_file ./model_g2p/train.tfr --strip_stress
+python text_preprocess --input_file ./model_g2p/test.csv --output_file ./model_g2p/test.tfr --strip_stress
+```
+And then, training:
+```shell script
+python train.py --train ./model_g2p/train.tfr --valid ./model_g2p/test.tfr --model_dir ./model_g2p/ --eval_secs 120 --l2_reg_scale 0 --ctc_weight -1 --encoder_units 64 --encoder_layers 3 --decoder_units 64 --decoder_layers 2 --sampling_probability 0.2 --attention_type luong --num_epochs 500 --learning_rate 1e-3 --batch_size 64 --num_channels 37 --reset
+```
+
 ### Tensorboard
 With the help of tensorflow estimator API, you can launch tensorboard by `tensorboard --logdir=MODEL_DIR`  to see the training procedure.
 

@@ -52,19 +52,24 @@ if __name__ == "__main__":
     lines = open(args.input_file, 'r').readlines()
     lines = [process_line(args, line) for line in tqdm(lines, unit='word', desc='Reading')]
     lines = [x for x in lines if x is not None]
-    in_vocab = set()
-    out_vocab = set()
-    for line in lines:
-        in_vocab.update(line['text'])
-        out_vocab.update(line['transcript'])
-    in_vocab = sorted(in_vocab)
-    out_vocab = sorted(out_vocab)
-    with open(in_vocab_path, 'w') as f:
-        for el in in_vocab:
-            f.write(f'{el}\n')
-    with open(vocab_path, 'w') as f:
-        for el in out_vocab:
-            f.write(f'{el}\n')
+    if os.path.exists(in_vocab_path) and os.path.exists(vocab_path):
+        print('Found vocabs, not collecting new.')
+        in_vocab = [x.strip() for x in open(in_vocab_path, 'r')]
+        out_vocab = [x.strip() for x in open(vocab_path, 'r')]
+    else:
+        in_vocab = set()
+        out_vocab = set()
+        for line in lines:
+            in_vocab.update(line['text'])
+            out_vocab.update(line['transcript'])
+        in_vocab = sorted(in_vocab)
+        out_vocab = sorted(out_vocab)
+        with open(in_vocab_path, 'w') as f:
+            for el in in_vocab:
+                f.write(f'{el}\n')
+        with open(vocab_path, 'w') as f:
+            for el in out_vocab:
+                f.write(f'{el}\n')
     lines = [encode_text(in_vocab, line) for line in tqdm(lines, unit='word', desc='Encoding')]
     with tf.io.TFRecordWriter(args.output_file) as writer:
         for x in tqdm(lines, unit='word', desc='Writing'):
